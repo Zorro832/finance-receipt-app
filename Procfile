@@ -1,1 +1,1 @@
-web: sh -c "cd /workspace/finance-receipt-app && python3 app.py"
+web: gunicorn app:app
