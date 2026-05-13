@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+
+{% block title %}批量导入 - 财务收据系统{% endblock %}
+
+{% block page_title %}批量导入收据{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-4">
+            <div class="card-header">
+                <span>上传Excel文件</span>
+                <a href="/api/batch/template" class="btn btn-sm btn-info float-end">
+                    <i class="fas fa-download"></i> 下载模板
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">选择Excel文件</label>
+                    <input type="file" class="form-control" id="excelFile" accept=".xlsx">
+                    <small class="text-muted">支持 .xlsx 格式，请使用系统提供的模板</small>
+                </div>
+                <button class="btn btn-primary" id="uploadBtn">
+                    <i class="fas fa-upload"></i> 上传并预览
+                </button>
+            </div>
+        </div>
+        
+        <div class="card" id="previewCard" style="display:none;">
+            <div class="card-header">
+                <span>数据预览</span>
+                <button class="btn btn-sm btn-success float-end" id="batchCreateBtn">
+                    <i class="fas fa-save"></i> 批量生成收据
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm" id="previewTable">
+                        <thead></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card mt-4" id="resultCard" style="display:none;">
+            <div class="card-header bg-success text-white">
+                <i class="fas fa-check-circle"></i> 导入结果
+            </div>
+            <div class="card-body">
+                <p>成功创建 <strong id="successCount">0</strong> 张收据</p>
+                <div id="errorList"></div>
+                <div id="receiptLinks"></div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <div class="card">
+            <div class="card-header">使用说明</div>
+            <div class="card-body">
+                <h6>1. 下载模板</h6>
+                <p>点击"下载模板"按钮获取标准Excel模板</p>
+                
+                <h6>2. 填写数据</h6>
+                <p>按照模板格式填写收据信息：</p>
+                <ul>
+                    <li>填制日期</li>
+                    <li>付款人名称、税号</li>
+                    <li>收款人名称、税号</li>
+                    <li>各项金额（社保、公积金、工资等）</li>
+                    <li>备注</li>
+                </ul>
+                
+                <h6>3. 上传文件</h6>
+                <p>选择填写好的Excel文件上传</p>
+                
+                <h6>4. 批量生成</h6>
+                <p>预览数据无误后，点击"批量生成收据"</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let previewData = [];
+
+$(document).ready(function() {
+    $('#uploadBtn').click(uploadFile);
+    $('#batchCreateBtn').click(batchCreate);
+});
+
+async function uploadFile() {
+    const fileInput = $('#excelFile')[0];
+    if (!fileInput.files.length) {
+        showAlert('请选择Excel文件', 'warning');
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append('file', fileInput.files[0]);
+    
+    try {
+        showLoading();
+        const response = await fetch('/api/batch/import', {
+            method: 'POST',
+            body: formData
+        });
+        const data = await response.json();
+        hideLoading();
+        
+        if (data.error) {
+            showAlert(data.error, 'danger');
+            return;
+        }
+        
+        // 显示结果
+        $('#previewCard').hide();
+        $('#resultCard').show();
+        $('#successCount').text(data.created || 0);
+        
+        let linksHtml = '<h6 class="mt-3">生成的收据：</h6><div class="list-group">';
+        if (data.receipts) {
+            data.receipts.forEach(r => {
+                linksHtml += `<a href="/receipt/${r.id}" class="list-group-item list-group-item-action" target="_blank">
+                    ${r.receipt_number}
+                </a>`;
+            });
+        }
+        linksHtml += '</div>';
+        $('#receiptLinks').html(linksHtml);
+        
+        if (data.errors && data.errors.length > 0) {
+            let errorHtml = '<h6 class="mt-3 text-danger">错误：</h6><ul>';
+            data.errors.forEach(e => {
+                errorHtml += `<li>第${e.row}行: ${e.error}</li>`;
+            });
+            errorHtml += '</ul>';
+            $('#errorList').html(errorHtml);
+        }
+        
+        showAlert(`成功导入 ${data.created} 张收据！`, 'success');
+    } catch (error) {
+        hideLoading();
+        showAlert('上传失败: ' + error.message, 'danger');
+    }
+}
+
+async function batchCreate() {
+    showAlert('请直接点击"上传并预览"按钮，系统会自动处理', 'info');
+}
+</script>
+{% endblock %}

@@ -1,53 +1,51 @@
 #!/usr/bin/env python3
 """
 Flask主应用
-实现所有API接口和前端页面路由
 """
 from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import pdf_generator
 import os
+import json
 from datetime import datetime
 from database import Database
+import openpyxl
+from io import BytesIO
 
-# 初始化Flask应用
 app = Flask(__name__)
 CORS(app)
 
-# 初始化数据库（JSON文件存储）
 db = Database()
 
 # ==================== 前端页面路由 ====================
 
 @app.route('/')
 def index():
-    """首页 - 仪表盘"""
     return render_template('dashboard.html')
 
 @app.route('/generate')
 def generate():
-    """收据生成页面"""
     return render_template('generate.html')
 
 @app.route('/receipts')
 def receipt_list():
-    """收据列表页面"""
     return render_template('receipts.html')
 
 @app.route('/receipt/<int:receipt_id>')
 def receipt_detail(receipt_id):
-    """收据详情页面"""
     return render_template('receipt_detail.html', receipt_id=receipt_id)
 
 @app.route('/templates')
 def templates_page():
-    """模板管理页面"""
     return render_template('templates.html')
 
 @app.route('/statistics')
 def statistics_page():
-    """数据统计页面"""
     return render_template('statistics.html')
+
+@app.route('/batch')
+def batch_page():
+    return render_template('batch.html')
 
 # ==================== 收据管理API ====================
 
@@ -144,6 +142,140 @@ def generate_receipt_pdf(receipt_id):
 def generate_number():
     try:
         return jsonify({'receipt_number': db.generate_receipt_number()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== 付款人/收款人API ====================
+
+@app.route('/api/payers', methods=['GET'])
+def get_payers():
+    try:
+        keyword = request.args.get('keyword', '')
+        return jsonify({'payers': db.get_payers(keyword if keyword else None)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/payees', methods=['GET'])
+def get_payees():
+    try:
+        keyword = request.args.get('keyword', '')
+        return jsonify({'payees': db.get_payees(keyword if keyword else None)})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+# ==================== 批量导入API ====================
+
+@app.route('/api/batch/import', methods=['POST'])
+def batch_import():
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': '请上传Excel文件'}), 400
+        file = request.files['file']
+        if not file.filename.endswith('.xlsx'):
+            return jsonify({'error': '请上传.xlsx格式的Excel文件'}), 400
+        
+        wb = openpyxl.load_workbook(file)
+        ws = wb.active
+        
+        # 解析表头（第1行）
+        headers = []
+        for col in range(1, ws.max_column + 1):
+            val = ws.cell(row=1, column=col).value
+            headers.append(str(val) if val else '')
+        
+        # 解析数据行（从第2行开始）
+        results = []
+        errors = []
+        for row_idx in range(2, ws.max_row + 1):
+            try:
+                row_data = {}
+                for col_idx, header in enumerate(headers, 1):
+                    row_data[header] = ws.cell(row=row_idx, column=col_idx).value
+                
+                # 提取字段
+                payment_date = row_data.get('填制日期', '')
+                if isinstance(payment_date, datetime):
+                    payment_date = payment_date.strftime('%Y-%m-%d')
+                
+                payer_name = row_data.get('付款人名称', '') or row_data.get('名称', '')
+                payer_tax_id = row_data.get('付款人税号', '') or row_data.get('税号', '')
+                payee_name = row_data.get('收款人', '')
+                payee_tax_id = row_data.get('收款人税号', '')
+                
+                # 计算各项金额
+                items = []
+                total = 0
+                for key in ['代收代付社保', '代收代付公积金', '代收代付工资', 
+                           '代收代付个税', '代收代付商险', '代收代付福利', '代收代付其他']:
+                    val = row_data.get(key, 0)
+                    if val:
+                        try:
+                            amount = float(val)
+                            if amount > 0:
+                                items.append({'name': key.replace('代收代付', ''), 'amount': amount})
+                                total += amount
+                        except:
+                            pass
+                
+                if not payer_name or total <= 0:
+                    continue
+                
+                # 生成收据
+                receipt_data = {
+                    'receipt_number': db.generate_receipt_number(),
+                    'payer_name': payer_name,
+                    'payer_tax_id': str(payer_tax_id) if payer_tax_id else '',
+                    'amount': total,
+                    'currency': 'CNY',
+                    'payment_date': str(payment_date) if payment_date else datetime.now().strftime('%Y-%m-%d'),
+                    'purpose': '、'.join([i['name'] for i in items]),
+                    'payee_name': str(payee_name) if payee_name else '北京厚泽人力资源有限公司',
+                    'payee_tax_id': str(payee_tax_id) if payee_tax_id else '',
+                    'tax_rate': 0,
+                    'tax_amount': 0,
+                    'total_amount': total,
+                    'notes': str(row_data.get('备注', '')) if row_data.get('备注') else ''
+                }
+                receipt_id = db.create_receipt(receipt_data)
+                results.append({'id': receipt_id, 'receipt_number': receipt_data['receipt_number']})
+            except Exception as e:
+                errors.append({'row': row_idx, 'error': str(e)})
+        
+        return jsonify({
+            'success': True,
+            'created': len(results),
+            'receipts': results,
+            'errors': errors
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/batch/template', methods=['GET'])
+def download_template():
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "批量导入模板"
+        
+        # 表头
+        headers = ['填制日期', '付款人名称', '付款人税号', '收款人', '收款人税号',
+                   '代收代付社保', '代收代付公积金', '代收代付工资', '代收代付个税',
+                   '代收代付商险', '代收代付福利', '代收代付其他', '合计', '备注']
+        ws.append(headers)
+        
+        # 示例数据
+        example = ['2026-05-13', '天津俊途企业管理咨询有限公司', '9112010175484682X1',
+                   '北京厚泽人力资源有限公司', '911101055825295879',
+                   '', '', '23399.77', '', '', '', '', '23399.77', 'C0247CL001171EZ\n2026.1']
+        ws.append(example)
+        
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        return send_file(output, as_attachment=True,
+                        download_name='批量导入模板.xlsx',
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

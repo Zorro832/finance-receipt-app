@@ -6,18 +6,14 @@
 
 {% block content %}
 <div class="row">
-    <!-- 表单区 -->
     <div class="col-lg-8">
         <div class="card">
-            <div class="card-header">
-                收据信息
-            </div>
+            <div class="card-header">收据信息</div>
             <div class="card-body">
                 <form id="receiptForm">
-                    <!-- 收据编号 -->
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="receipt_number" class="form-label">收据编号 <span class="text-danger">*</span></label>
+                            <label class="form-label">收据编号 <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <input type="text" class="form-control" id="receipt_number" required>
                                 <button class="btn btn-outline-primary" type="button" id="generateNumberBtn">
@@ -26,41 +22,51 @@
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <label for="payment_date" class="form-label">日期 <span class="text-danger">*</span></label>
+                            <label class="form-label">日期 <span class="text-danger">*</span></label>
                             <input type="date" class="form-control" id="payment_date" required>
                         </div>
                     </div>
                     
-                    <!-- 付款方信息 -->
-                    <h6 class="mb-3 text-primary">付款方信息</h6>
+                    <h6 class="mb-3 text-primary">付款人信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-8">
-                            <label for="payer_name" class="form-label">付款方名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="payer_name" required>
+                            <label class="form-label">付款人名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="payer_name" required autocomplete="off">
+                            <div id="payerSuggestions" class="list-group position-absolute w-100" style="z-index:1000; display:none;"></div>
                         </div>
                         <div class="col-md-4">
-                            <label for="payer_tax_id" class="form-label">付款方税号</label>
+                            <label class="form-label">付款人税号</label>
                             <input type="text" class="form-control" id="payer_tax_id">
                         </div>
                     </div>
                     
-                    <!-- 收款信息 -->
+                    <h6 class="mb-3 text-primary">收款人信息</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">收款人名称 <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="payee_name" required autocomplete="off">
+                            <div id="payeeSuggestions" class="list-group position-absolute w-100" style="z-index:1000; display:none;"></div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">收款人税号</label>
+                            <input type="text" class="form-control" id="payee_tax_id">
+                        </div>
+                    </div>
+                    
                     <h6 class="mb-3 text-primary">收款信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-6">
-                            <label for="amount" class="form-label">金额 <span class="text-danger">*</span></label>
+                            <label class="form-label">金额 <span class="text-danger">*</span></label>
                             <div class="input-group">
                                 <select class="form-select" id="currency" style="max-width: 100px;">
                                     <option value="CNY">¥ CNY</option>
                                     <option value="USD">$ USD</option>
-                                    <option value="EUR">€ EUR</option>
-                                    <option value="GBP">£ GBP</option>
                                 </select>
                                 <input type="number" class="form-control" id="amount" step="0.01" min="0" required>
                             </div>
                         </div>
                         <div class="col-md-6">
-                            <label for="tax_rate" class="form-label">税率 (%)</label>
+                            <label class="form-label">税率 (%)</label>
                             <input type="number" class="form-control" id="tax_rate" step="0.01" min="0" max="100" value="0">
                         </div>
                     </div>
@@ -76,31 +82,16 @@
                         </div>
                     </div>
                     
-                    <!-- 收款方信息 -->
-                    <h6 class="mb-3 text-primary">收款方信息</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label for="payee_name" class="form-label">收款方名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="payee_name" required>
-                        </div>
-                        <div class="col-md-4">
-                            <label for="payee_tax_id" class="form-label">收款方税号</label>
-                            <input type="text" class="form-control" id="payee_tax_id">
-                        </div>
-                    </div>
-                    
-                    <!-- 其他信息 -->
-                    <h6 class="mb-3 text-primary">其他信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="purpose" class="form-label">收款事由 <span class="text-danger">*</span></label>
+                            <label class="form-label">收款事由 <span class="text-danger">*</span></label>
                             <textarea class="form-control" id="purpose" rows="3" required></textarea>
                         </div>
                     </div>
                     
                     <div class="row mb-3">
                         <div class="col-md-12">
-                            <label for="notes" class="form-label">备注</label>
+                            <label class="form-label">备注</label>
                             <textarea class="form-control" id="notes" rows="2"></textarea>
                         </div>
                     </div>
@@ -109,10 +100,10 @@
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="fas fa-save"></i> 保存收据
                         </button>
-                        <button type="button" class="btn btn-success btn-lg ml-3" id="saveAndPdfBtn">
+                        <button type="button" class="btn btn-success btn-lg ms-3" id="saveAndPdfBtn">
                             <i class="fas fa-file-pdf"></i> 保存并生成PDF
                         </button>
-                        <button type="reset" class="btn btn-secondary btn-lg ml-3">
+                        <button type="reset" class="btn btn-secondary btn-lg ms-3">
                             <i class="fas fa-redo"></i> 重置
                         </button>
                     </div>
@@ -121,12 +112,9 @@
         </div>
     </div>
     
-    <!-- 预览区 -->
     <div class="col-lg-4">
         <div class="card sticky-top" style="top: 20px;">
-            <div class="card-header">
-                实时预览
-            </div>
+            <div class="card-header">实时预览</div>
             <div class="card-body" style="max-height: 800px; overflow-y: auto;">
                 <div id="receiptPreview">
                     <div class="text-center text-muted">
@@ -143,80 +131,109 @@
 {% block extra_js %}
 <script>
 $(document).ready(function() {
-    // 设置默认日期为今天
     $('#payment_date').val(new Date().toISOString().split('T')[0]);
     
-    // 自动生成收据编号
     $('#generateNumberBtn').click(generateReceiptNumber);
-    
-    // 自动计算税额和总额
     $('#amount, #tax_rate').on('input', calculateTax);
+    $('#receiptForm').submit(function(e) { e.preventDefault(); saveReceipt(false); });
+    $('#saveAndPdfBtn').click(function() { saveReceipt(true); });
     
-    // 表单提交
-    $('#receiptForm').submit(function(e) {
-        e.preventDefault();
-        saveReceipt(false);
+    // 付款人自动搜索
+    $('#payer_name').on('input', function() {
+        searchPayers($(this).val());
     });
     
-    // 保存并生成PDF
-    $('#saveAndPdfBtn').click(function() {
-        saveReceipt(true);
+    // 收款人自动搜索
+    $('#payee_name').on('input', function() {
+        searchPayees($(this).val());
     });
     
-    // 表单输入时更新预览
-    $('#receiptForm input, #receiptForm textarea, #receiptForm select').on('input change', updatePreview);
+    // 点击外部关闭建议列表
+    $(document).click(function(e) {
+        if (!$(e.target).closest('#payer_name, #payerSuggestions').length) {
+            $('#payerSuggestions').hide();
+        }
+        if (!$(e.target).closest('#payee_name, #payeeSuggestions').length) {
+            $('#payeeSuggestions').hide();
+        }
+    });
 });
 
-// 生成收据编号
+async function searchPayers(keyword) {
+    if (keyword.length < 1) {
+        $('#payerSuggestions').hide();
+        return;
+    }
+    try {
+        const data = await apiRequest('/api/payers?keyword=' + encodeURIComponent(keyword));
+        if (data.payers && data.payers.length > 0) {
+            let html = '';
+            data.payers.forEach(p => {
+                html += `<a href="#" class="list-group-item list-group-item-action" onclick="selectPayer('${p.name}', '${p.tax_id || ''}'); return false;">
+                    <strong>${p.name}</strong>${p.tax_id ? '<br><small class="text-muted">税号: ' + p.tax_id + '</small>' : ''}
+                </a>`;
+            });
+            $('#payerSuggestions').html(html).show();
+        } else {
+            $('#payerSuggestions').hide();
+        }
+    } catch (e) {
+        $('#payerSuggestions').hide();
+    }
+}
+
+function selectPayer(name, taxId) {
+    $('#payer_name').val(name);
+    $('#payer_tax_id').val(taxId);
+    $('#payerSuggestions').hide();
+}
+
+async function searchPayees(keyword) {
+    if (keyword.length < 1) {
+        $('#payeeSuggestions').hide();
+        return;
+    }
+    try {
+        const data = await apiRequest('/api/payees?keyword=' + encodeURIComponent(keyword));
+        if (data.payees && data.payees.length > 0) {
+            let html = '';
+            data.payees.forEach(p => {
+                html += `<a href="#" class="list-group-item list-group-item-action" onclick="selectPayee('${p.name}', '${p.tax_id || ''}'); return false;">
+                    <strong>${p.name}</strong>${p.tax_id ? '<br><small class="text-muted">税号: ' + p.tax_id + '</small>' : ''}
+                </a>`;
+            });
+            $('#payeeSuggestions').html(html).show();
+        } else {
+            $('#payeeSuggestions').hide();
+        }
+    } catch (e) {
+        $('#payeeSuggestions').hide();
+    }
+}
+
+function selectPayee(name, taxId) {
+    $('#payee_name').val(name);
+    $('#payee_tax_id').val(taxId);
+    $('#payeeSuggestions').hide();
+}
+
 async function generateReceiptNumber() {
     try {
         const data = await apiRequest('/api/receipts/generate-number');
         $('#receipt_number').val(data.receipt_number);
-        showAlert('收据编号已生成', 'success');
-    } catch (error) {
-        console.error('生成编号失败:', error);
-    }
+    } catch (error) {}
 }
 
-// 计算税额和总额
 function calculateTax() {
     const amount = parseFloat($('#amount').val()) || 0;
     const taxRate = parseFloat($('#tax_rate').val()) || 0;
     const taxAmount = amount * taxRate / 100;
     const totalAmount = amount + taxAmount;
-    
     $('#tax_amount').val('¥' + taxAmount.toFixed(2));
     $('#total_amount').val('¥' + totalAmount.toFixed(2));
 }
 
-// 更新预览
-function updatePreview() {
-    const payerName = $('#payer_name').val() || '***';
-    const amount = $('#amount').val() || '0.00';
-    const purpose = $('#purpose').val() || '***';
-    const receiptNumber = $('#receipt_number').val() || '***';
-    const paymentDate = $('#payment_date').val() || '***';
-    
-    const previewHTML = `
-        <div style="border: 1px solid #ddd; padding: 20px; border-radius: 10px;">
-            <h5 class="text-center mb-3">财务收据</h5>
-            <hr>
-            <p><strong>编号:</strong> ${receiptNumber}</p>
-            <p><strong>日期:</strong> ${paymentDate}</p>
-            <p><strong>付款方:</strong> ${payerName}</p>
-            <p><strong>事由:</strong> ${purpose}</p>
-            <p><strong>金额:</strong> <span class="text-danger">¥${amount}</span></p>
-            <div class="text-center text-muted mt-3">
-                <small>预览模式</small>
-            </div>
-        </div>
-    `;
-    
-    $('#receiptPreview').html(previewHTML);
-}
-
-// 保存收据
-async function saveReceipt(generatePdf = false) {
+async function saveReceipt(generatePdf) {
     const formData = {
         receipt_number: $('#receipt_number').val(),
         payer_name: $('#payer_name').val(),
@@ -237,23 +254,15 @@ async function saveReceipt(generatePdf = false) {
             method: 'POST',
             body: JSON.stringify(formData)
         });
-        
         hideLoading();
         showAlert('收据保存成功！', 'success');
-        
         if (generatePdf) {
-            // 下载PDF
             window.open(`/api/receipts/${data.receipt_id}/pdf`, '_blank');
         }
-        
-        // 重置表单
         $('#receiptForm')[0].reset();
         $('#payment_date').val(new Date().toISOString().split('T')[0]);
-        $('#receiptPreview').html('<div class="text-center text-muted"><i class="fas fa-file-alt fa-3x mb-3"></i><p>填写表单以预览收据</p></div>');
-        
     } catch (error) {
         hideLoading();
-        console.error('保存失败:', error);
     }
 }
 </script>
