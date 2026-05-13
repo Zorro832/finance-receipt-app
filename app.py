@@ -342,6 +342,9 @@ def generate_receipt_pdf(receipt_id):
             return jsonify({'error': '收据不存在'}), 404
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
+        # 如果模板包含不兼容CSS，使用最新模板
+        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
+            template_html = pdf_generator.get_default_template_html()
         pdf_path = pdf_generator.generate_pdf(receipt, template_html)
 
         # 判断是否内联预览
@@ -365,6 +368,8 @@ def preview_receipt_html(receipt_id):
             return jsonify({'error': '收据不存在'}), 404
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
+        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
+            template_html = pdf_generator.get_default_template_html()
         html_content = pdf_generator.render_template(template_html or pdf_generator.get_default_template_html(), receipt)
         return html_content
     except Exception as e:
@@ -385,6 +390,8 @@ def preview_receipt_from_data():
 
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
+        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
+            template_html = pdf_generator.get_default_template_html()
         html_content = pdf_generator.render_template(template_html or pdf_generator.get_default_template_html(), data)
         return html_content
     except Exception as e:

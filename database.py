@@ -304,6 +304,19 @@ class Database:
 
     def init_default_templates(self):
         templates = self._read_json(TEMPLATES_FILE)
+        # 更新默认模板为最新版本（如果包含旧的不兼容CSS）
+        from pdf_generator import get_default_template_html as _get_new_tpl
+        new_html = _get_new_tpl()
+        updated = False
+        for t in templates:
+            if t.get("is_default"):
+                old_html = t.get("template_html", "")
+                if "SimSun" in old_html or "display: flex" in old_html or "宋体" in old_html:
+                    t["template_html"] = new_html
+                    t["updated_at"] = datetime.now().isoformat()
+                    updated = True
         if not templates:
             templates = [get_default_template_data()]
+            updated = True
+        if updated:
             self._write_json(TEMPLATES_FILE, templates)
