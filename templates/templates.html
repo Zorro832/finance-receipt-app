@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+
+{% block title %}模板管理 - 财务收据系统{% endblock %}
+
+{% block page_title %}模板管理{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <button class="btn btn-primary" id="createTemplateBtn">
+            <i class="fas fa-plus"></i> 创建新模板
+        </button>
+    </div>
+</div>
+
+<div class="row" id="templatesContainer">
+    <div class="col-12 text-center">
+        <div class="spinner-border" role="status">
+            <span class="visually-hidden">加载中...</span>
+        </div>
+    </div>
+</div>
+
+<!-- 创建/编辑模板模态框 -->
+<div class="modal fade" id="templateModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">创建模板</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="templateForm">
+                    <input type="hidden" id="template_id">
+                    <div class="mb-3">
+                        <label class="form-label">模板名称 <span class="text-danger">*</span></label>
+                        <input type="text" class="form-control" id="template_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">描述</label>
+                        <textarea class="form-control" id="template_description" rows="2"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">HTML模板 <span class="text-danger">*</span></label>
+                        <textarea class="form-control" id="template_html" rows="15" required 
+                            placeholder="使用 {{ 变量名 }} 作为占位符，可用变量：receipt_number, payer_name, payer_tax_id, amount, currency_symbol, payment_date, purpose, payee_name, payee_tax_id, tax_rate, tax_amount, total_amount, notes, created_at"></textarea>
+                        <small class="text-muted">提示：使用HTML和CSS设计收据样式，变量用双大括号包裹</small>
+                    </div>
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" id="template_is_default">
+                        <label class="form-check-label" for="template_is_default">设为默认模板</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveTemplateBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 预览模态框 -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">模板预览</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <iframe id="previewFrame" style="width: 100%; height: 600px; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    loadTemplates();
+    
+    // 创建模板按钮
+    $('#createTemplateBtn').click(function() {
+        $('#modalTitle').text('创建模板');
+        $('#templateForm')[0].reset();
+        $('#template_id').val('');
+        $('#templateModal').modal('show');
+    });
+    
+    // 保存模板
+    $('#saveTemplateBtn').click(saveTemplate);
+});
+
+// 加载模板列表
+async function loadTemplates() {
+    try {
+        const data = await apiRequest('/api/templates');
+        renderTemplates(data.templates);
+    } catch (error) {
+        console.error('加载模板失败:', error);
+        $('#templatesContainer').html('<div class="col-12"><div class="alert alert-danger">加载失败</div></div>');
+    }
+}
+
+// 渲染模板列表
+function renderTemplates(templates) {
+    if (templates.length === 0) {
+        $('#templatesContainer').html('<div class="col-12"><div class="alert alert-info">暂无模板，请创建第一个模板</div></div>');
+        return;
+    }
+    
+    let html = '';
+    templates.forEach(template => {
+        html += `
+            <div class="col-md-6 col-lg-4 mb-4">
+                <div class="card h-100 ${template.is_default ? 'border-primary' : ''}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>
+                            <strong>${template.name}</strong>
+                            ${template.is_default ? '<span class="badge bg-primary ms-2">默认</span>' : ''}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text text-muted">${template.description || '暂无描述'}</p>
+                        <small class="text-muted">创建时间: ${template.created_at}</small>
+                    </div>
+                    <div class="card-footer">
+                        <button class="btn btn-sm btn-info" onclick="previewTemplate(${template.id})">
+                            <i class="fas fa-eye"></i> 预览
+                        </button>
+                        <button class="btn btn-sm btn-warning" onclick="editTemplate(${template.id})">
+                            <i class="fas fa-edit"></i> 编辑
+                        </button>
+                        ${!template.is_default ? `
+                            <button class="btn btn-sm btn-success" onclick="setDefaultTemplate(${template.id})">
+                                <i class="fas fa-check"></i> 设为默认
+                            </button>
+                            <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${template.id})">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        ` : ''}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+    
+    $('#templatesContainer').html(html);
+}
+
+// 保存模板
+async function saveTemplate() {
+    const templateId = $('#template_id').val();
+    const data = {
+        name: $('#template_name').val(),
+        description: $('#template_description').val(),
+        template_html: $('#template_html').val(),
+        is_default: $('#template_is_default').is(':checked') ? 1 : 0
+    };
+    
+    if (!data.name || !data.template_html) {
+        showAlert('请填写完整信息', 'warning');
+        return;
+    }
+    
+    try {
+        showLoading();
+        
+        if (templateId) {
+            // 更新模板
+            showAlert('更新功能开发中...', 'info');
+            hideLoading();
+            return;
+        } else {
+            // 创建模板
+            await apiRequest('/api/templates', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+        }
+        
+        hideLoading();
+        showAlert('模板保存成功', 'success');
+        $('#templateModal').modal('hide');
+        loadTemplates();
+    } catch (error) {
+        hideLoading();
+        console.error('保存失败:', error);
+    }
+}
+
+// 预览模板
+async function previewTemplate(templateId) {
+    showAlert('预览功能开发中...', 'info');
+}
+
+// 编辑模板
+async function editTemplate(templateId) {
+    showAlert('编辑功能开发中...', 'info');
+}
+
+// 设置默认模板
+async function setDefaultTemplate(templateId) {
+    showAlert('设置默认功能开发中...', 'info');
+}
+
+// 删除模板
+async function deleteTemplate(templateId) {
+    if (!confirm('确定要删除这个模板吗？')) {
+        return;
+    }
+    showAlert('删除功能开发中...', 'info');
+}
+</script>
+{% endblock %}

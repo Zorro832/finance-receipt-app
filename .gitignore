@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+instance/
+receipts_pdf/
+*.log
+dist/
+build/
+*.spec
+test_receipt*.pdf

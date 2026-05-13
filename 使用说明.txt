@@ -1,0 +1,182 @@
+# 财务收据系统 - 使用说明
+
+## 📦 打包说明
+
+这是一个**便携式**财务收据生成系统，无需安装，解压后即可使用！
+
+---
+
+## 💻 给别人使用的步骤
+
+### 1. 打包文件
+
+**在你的电脑上操作**：
+
+1. 打开文件夹：`/workspace/finance-receipt-app`
+2. 选中以下文件和文件夹：
+   - `app.py`
+   - `database.py`
+   - `pdf_generator.py`
+   - `init_db.py`
+   - `requirements.txt`
+   - `templates/` 文件夹
+   - `static/` 文件夹
+   - `启动.bat` (Windows启动脚本)
+   - `启动.sh` (Linux/Mac启动脚本)
+   - `使用说明.txt` (本文件)
+
+3. **右键 → 压缩/打包**
+   - Windows: 发送到 → 压缩(zipped)文件夹
+   - Mac: 压缩 "finance-receipt-app"
+   - Linux: `tar -czf finance-receipt-app.tar.gz <文件列表>`
+
+4. 将压缩包发给别人
+
+---
+
+## 📱 别人使用的步骤
+
+### Windows用户：
+
+1. **解压文件**
+   - 右键点击压缩包 → "全部解压缩"
+   - 选择解压位置（建议：桌面或D盘根目录）
+
+2. **双击启动**
+   - 打开解压后的文件夹
+   - **双击 `启动.bat`** 文件
+   - 首次运行会自动安装依赖（需要几分钟，保持联网）
+   - 看到 "✓ 启动成功！" 后
+   - 在浏览器中打开：`http://localhost:5000`
+
+3. **开始使用**
+   - 参照《使用教程》使用系统
+
+### Linux/Mac用户：
+
+1. **解压文件**
+   ```bash
+   tar -xzf finance-receipt-app.tar.gz
+   cd finance-receipt-app
+   ```
+
+2. **启动应用**
+   ```bash
+   chmod +x 启动.sh
+   ./启动.sh
+   ```
+
+3. **访问应用**
+   - 在浏览器中打开：`http://localhost:5000`
+
+---
+
+## 📋 系统要求
+
+- **操作系统**: Windows 7+, macOS 10.12+, Linux
+- **Python**: 3.8+ （如果没安装，启动脚本会提示下载）
+- **内存**: 至少512MB可用内存
+- **网络**: 首次运行需要下载依赖包（约100MB）
+
+---
+
+## 🔧 常见问题
+
+### Q1: 启动时报错"未检测到Python"
+
+**解决方法**：
+1. 访问 https://www.python.org/downloads/
+2. 下载并安装Python 3.8或以上版本
+3. **重要**：安装时勾选 "Add Python to PATH"
+4. 重新双击 `启动.bat`
+
+---
+
+### Q2: 端口5000被占用
+
+**解决方法**：
+1. 打开 `app.py` 文件
+2. 找到最后一行：`app.run(debug=True, host='0.0.0.0', port=5000)`
+3. 把 `5000` 改成其他数字，例如 `8080`
+4. 保存文件，重新启动
+
+---
+### Q3: 如何停止应用？
+
+**Windows**:
+- 在启动脚本的黑色窗口中按 `Ctrl + C`
+- 或直接关闭黑色窗口
+
+**Linux/Mac**:
+- 在终端中按 `Ctrl + C`
+
+---
+### Q4: 数据保存在哪里？
+
+所有数据保存在 `instance/receipts.db` 文件中。
+
+**备份方法**：
+- 复制 `instance/receipts.db` 文件到其他位置
+- 恢复时，把备份的文件复制回原位置
+
+---
+### Q5: 可以发给多少人使用？
+
+✅ **无限制！**
+- 你可以无限次复制和分发这个系统
+- 不需要授权、不需要付费
+- 适合公司内外使用
+
+---
+
+## 📞 技术支持
+
+如遇到问题，请联系开发者。
+
+---
+
+## 📄 文件清单
+
+确保以下文件都在文件夹中：
+
+```
+finance-receipt-app/
+├── app.py                 # 主程序
+├── database.py            # 数据库操作
+├── pdf_generator.py       # PDF生成
+├── init_db.py            # 初始化脚本
+├── requirements.txt       # 依赖列表
+├── 启动.bat              # Windows启动脚本
+├── 启动.sh               # Linux/Mac启动脚本
+├── 使用说明.txt          # 本文件
+├── templates/           # 网页模板
+│   ├── base.html
+│   ├── dashboard.html
+│   ├── generate.html
+│   ├── receipts.html
+│   ├── receipt_detail.html
+│   ├── templates.html
+│   └── statistics.html
+├── static/             # 静态文件（如果有）
+└── instance/           # 数据库（自动创建）
+    └── receipts.db
+```
+
+**缺少任何文件都可能导致无法运行！**
+
+---
+
+## ✅ 快速检查清单
+
+在发送给别人之前，请确认：
+
+- [ ] 所有 `.py` 文件都在
+- [ ] `templates/` 文件夹及内容完整
+- [ ] `启动.bat` 和 `启动.sh` 都在
+- [ ] `requirements.txt` 在
+- [ ] 已压缩成 `.zip` 或 `.tar.gz` 文件
+- [ ] 已测试解压后能正常运行
+
+---
+
+**祝使用愉快！** 🎉

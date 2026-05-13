@@ -1,0 +1,203 @@
+{% extends "base.html" %}
+
+{% block title %}仪表盘 - 财务收据系统{% endblock %}
+
+{% block page_title %}仪表盘{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
+                            今日收具</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayCount">0</div>
+                        <div class="text-xs text-muted mt-2" id="todayAmount">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar-day fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card success h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
+                            本月收具</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="monthCount">0</div>
+                        <div class="text-xs text-muted mt-2" id="monthAmount">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-calendar-alt fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card info h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
+                            全部收具</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalCount">0</div>
+                        <div class="text-xs text-muted mt-2" id="totalAmount">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-receipt fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card warning h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
+                            汇率参考</div>
+                        <div class="h5 mb-0 font-weight-bold text-gray-800">¥7.26</div>
+                        <div class="text-xs text-muted mt-2">1 USD = 7.26 CNY</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 快速操作 -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                快速操作
+            </div>
+            <div class="card-body">
+                <a href="/generate" class="btn btn-primary btn-lg mr-3">
+                    <i class="fas fa-plus"></i> 开具新收据
+                </a>
+                <a href="/receipts" class="btn btn-success btn-lg mr-3">
+                    <i class="fas fa-list"></i> 查看所有收据
+                </a>
+                <a href="/templates" class="btn btn-info btn-lg mr-3">
+                    <i class="fas fa-file-alt"></i> 管理模板
+                </a>
+                <a href="/statistics" class="btn btn-warning btn-lg">
+                    <i class="fas fa-chart-bar"></i> 数据统计
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近收据 -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>最近收据</span>
+                <a href="/receipts" class="btn btn-sm btn-primary">查看全部</a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>收据编号</th>
+                                <th>付款方</th>
+                                <th>金额</th>
+                                <th>日期</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentReceipts">
+                            <tr>
+                                <td colspan="5" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    loadStatistics();
+    loadRecentReceipts();
+});
+
+// 加载统计数据
+async function loadStatistics() {
+    try {
+        const data = await apiRequest('/api/statistics/summary');
+        
+        $('#todayCount').text(data.today.count);
+        $('#todayAmount').text('¥' + data.today.amount.toFixed(2));
+        
+        $('#monthCount').text(data.month.count);
+        $('#monthAmount').text('¥' + data.month.amount.toFixed(2));
+        
+        $('#totalCount').text(data.total.count);
+        $('#totalAmount').text('¥' + data.total.amount.toFixed(2));
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+    }
+}
+
+// 加载最近收据
+async function loadRecentReceipts() {
+    try {
+        const data = await apiRequest('/api/receipts?limit=5');
+        
+        if (data.receipts.length === 0) {
+            $('#recentReceipts').html('<tr><td colspan="5" class="text-center">暂无收据记录</td></tr>');
+            return;
+        }
+        
+        let html = '';
+        data.receipts.forEach(receipt => {
+            html += `
+                <tr>
+                    <td><strong>${receipt.receipt_number}</strong></td>
+                    <td>${receipt.payer_name}</td>
+                    <td><strong class="text-primary">¥${receipt.total_amount.toFixed(2)}</strong></td>
+                    <td>${receipt.payment_date}</td>
+                    <td>
+                        <a href="/receipt/${receipt.id}" class="btn btn-sm btn-info">
+                            <i class="fas fa-eye"></i>
+                        </a>
+                        <a href="/api/receipts/${receipt.id}/pdf" class="btn btn-sm btn-danger">
+                            <i class="fas fa-file-pdf"></i>
+                        </a>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#recentReceipts').html(html);
+    } catch (error) {
+        console.error('加载最近收据失败:', error);
+        $('#recentReceipts').html('<tr><td colspan="5" class="text-center text-danger">加载失败</td></tr>');
+    }
+}
+</script>
+{% endblock %}

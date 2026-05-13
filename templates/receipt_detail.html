@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+
+{% block title %}收据详情 - 财务收据系统{% endblock %}
+
+{% block page_title %}收据详情{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- 收据详情 -->
+    <div class="col-lg-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>收据信息</span>
+                <div>
+                    <button class="btn btn-sm btn-primary" id="editBtn">
+                        <i class="fas fa-edit"></i> 编辑
+                    </button>
+                    <button class="btn btn-sm btn-danger" id="downloadPdfBtn">
+                        <i class="fas fa-file-pdf"></i> 下载PDF
+                    </button>
+                    <button class="btn btn-sm btn-success" id="printBtn">
+                        <i class="fas fa-print"></i> 打印
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="receiptDetail">
+                    <div class="text-center">
+                        <div class="spinner-border" role="status">
+                            <span class="visually-hidden">加载中...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- PDF预览 -->
+    <div class="col-lg-4">
+        <div class="card sticky-top" style="top: 20px;">
+            <div class="card-header">
+                PDF预览
+            </div>
+            <div class="card-body" style="height: 800px; overflow-y: auto;">
+                <iframe id="pdfPreview" style="width: 100%; height: 100%; border: none;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 编辑模态框 -->
+<div class="modal fade" id="editModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">编辑收据</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="editForm">
+                    <input type="hidden" id="edit_id">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">收据编号</label>
+                            <input type="text" class="form-control" id="edit_receipt_number" required>
+                        </div>
+                        <div class="col-md-6">
+    <label class="form-label">日期</label>
+                            <input type="date" class="form-control" id="edit_payment_date" required>
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-3 text-primary">付款方信息</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">付款方名称</label>
+                            <input type="text" class="form-control" id="edit_payer_name" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">付款方税号</label>
+                            <input type="text" class="form-control" id="edit_payer_tax_id">
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-3 text-primary">收款信息</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">金额</label>
+                            <input type="number" class="form-control" id="edit_amount" step="0.01" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">税率 (%)</label>
+                            <input type="number" class="form-control" id="edit_tax_rate" step="0.01">
+                        </div>
+                    </div>
+                    
+                    <h6 class="mb-3 text-primary">收款方信息</h6>
+                    <div class="row mb-3">
+                        <div class="col-md-8">
+                            <label class="form-label">收款方名称</label>
+                            <input type="text" class="form-control" id="edit_payee_name" required>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">收款方税号</label>
+                            <input type="text" class="form-control" id="edit_payee_tax_id">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">收款事由</label>
+                        <textarea class="form-control" id="edit_purpose" rows="3" required></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">备注</label>
+                        <textarea class="form-control" id="edit_notes" rows="2"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="saveEditBtn">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentReceiptId = {{ receipt_id }};
+
+$(document).ready(function() {
+    loadReceiptDetail();
+    
+    // 编辑按钮
+    $('#editBtn').click(function() {
+        loadReceiptForEdit();
+    });
+    
+    // 下载PDF
+    $('#downloadPdfBtn').click(function() {
+        window.open(`/api/receipts/${currentReceiptId}/pdf`, '_blank');
+    });
+    
+    // 打印
+    $('#printBtn').click(function() {
+        window.print();
+    });
+    
+    // 保存编辑
+    $('#saveEditBtn').click(saveEdit);
+});
+
+// 加载收据详情
+async function loadReceiptDetail() {
+    try {
+        const receipt = await apiRequest(`/api/receipts/${currentReceiptId}`);
+        
+        const currencySymbols = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£' };
+        const symbol = currencySymbols[receipt.currency] || '$';
+        
+        const html = `
+            <table class="table table-bordered">
+                <tr>
+                    <td class="table-light" style="width: 150px;"><strong>收据编号</strong></td>
+                    <td>${receipt.receipt_number}</td>
+                    <td class="table-light" style="width: 150px;"><strong>日期</strong></td>
+                    <td>${receipt.payment_date}</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>付款方</strong></td>
+                    <td>${receipt.payer_name}</td>
+                    <td class="table-light"><strong>付款方税号</strong></td>
+                    <td>${receipt.payer_tax_id || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>收款事由</strong></td>
+                    <td colspan="3">${receipt.purpose}</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>金额</strong></td>
+                    <td class="h5 text-danger"><strong>${symbol}${receipt.amount.toFixed(2)}</strong></td>
+                    <td class="table-light"><strong>税率</strong></td>
+                    <td>${receipt.tax_rate}%</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>税额</strong></td>
+                    <td>${symbol}${receipt.tax_amount.toFixed(2)}</td>
+                    <td class="table-light"><strong>总金额</strong></td>
+                    <td class="h5 text-danger"><strong>${symbol}${receipt.total_amount.toFixed(2)}</strong></td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>收款方</strong></td>
+                    <td>${receipt.payee_name}</td>
+                    <td class="table-light"><strong>收款方税号</strong></td>
+                    <td>${receipt.payee_tax_id || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>备注</strong></td>
+                    <td colspan="3">${receipt.notes || '-'}</td>
+                </tr>
+                <tr>
+                    <td class="table-light"><strong>创建时间</strong></td>
+                    <td colspan="3">${receipt.created_at}</td>
+                </tr>
+            </table>
+        `;
+        
+        $('#receiptDetail').html(html);
+        
+        // 加载PDF预览
+        $('#pdfPreview').attr('src', `/api/receipts/${currentReceiptId}/pdf`);
+        
+    } catch (error) {
+        console.error('加载收据详情失败:', error);
+        $('#receiptDetail').html('<div class="alert alert-danger">加载失败</div>');
+    }
+}
+
+// 加载收据数据到编辑表单
+async function loadReceiptForEdit() {
+    try {
+        const receipt = await apiRequest(`/api/receipts/${currentReceiptId}`);
+        
+        $('#edit_id').val(receipt.id);
+        $('#edit_receipt_number').val(receipt.receipt_number);
+        $('#edit_payment_date').val(receipt.payment_date);
+        $('#edit_payer_name').val(receipt.payer_name);
+        $('#edit_payer_tax_id').val(receipt.payer_tax_id);
+        $('#edit_amount').val(receipt.amount);
+        $('#edit_tax_rate').val(receipt.tax_rate);
+        $('#edit_payee_name').val(receipt.payee_name);
+        $('#edit_payee_tax_id').val(receipt.payee_tax_id);
+        $('#edit_purpose').val(receipt.purpose);
+        $('#edit_notes').val(receipt.notes);
+        
+        $('#editModal').modal('show');
+    } catch (error) {
+        console.error('加载编辑数据失败:', error);
+    }
+}
+
+// 保存编辑
+async function saveEdit() {
+    const formData = {
+        receipt_number: $('#edit_receipt_number').val(),
+        payment_date: $('#edit_payment_date').val(),
+        payer_name: $('#edit_payer_name').val(),
+        payer_tax_id: $('#edit_payer_tax_id').val(),
+        amount: parseFloat($('#edit_amount').val()),
+        tax_rate: parseFloat($('#edit_tax_rate').val()) || 0,
+        payee_name: $('#edit_payee_name').val(),
+        payee_tax_id: $('#edit_payee_tax_id').val(),
+        purpose: $('#edit_purpose').val(),
+        notes: $('#edit_notes').val()
+    };
+    
+    try {
+        showLoading();
+        await apiRequest(`/api/receipts/${currentReceiptId}`, {
+            method: 'PUT',
+            body: JSON.stringify(formData)
+        });
+        
+        hideLoading();
+        showAlert('保存成功', 'success');
+        $('#editModal').modal('hide');
+        loadReceiptDetail();
+    } catch (error) {
+        hideLoading();
+        console.error('保存失败:', error);
+    }
+}
+</script>
+{% endblock %}

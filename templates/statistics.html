@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block title %}数据统计 - 财务收据系统{% endblock %}
+
+{% block page_title %}数据统计{% endblock %}
+
+{% block content %}
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">总收具数</div>
+                        <div class="h5 mb-0 font-weight-bold" id="statTotalCount">0</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-receipt fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card success h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">总金额</div>
+                        <div class="h5 mb-0 font-weight-bold" id="statTotalAmount">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card info h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">平均金额</div>
+                        <div class="h5 mb-0 font-weight-bold" id="statAverage">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-chart-line fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-3 col-md-6 mb-4">
+        <div class="card stat-card warning h-100">
+            <div class="card-body">
+                <div class="row no-gutters align-items-center">
+                    <div class="col mr-2">
+                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">最大单笔</div>
+                        <div class="h5 mb-0 font-weight-bold" id="statMaxAmount">¥0.00</div>
+                    </div>
+                    <div class="col-auto">
+                        <i class="fas fa-trophy fa-2x text-gray-300"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 图表 -->
+<div class="row">
+    <div class="col-xl-8 mb-4">
+        <div class="card">
+            <div class="card-header">
+                月度趋势
+            </div>
+            <div class="card-body">
+                <canvas id="monthlyChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4 mb-4">
+        <div class="card">
+            <div class="card-header">
+                币种分布
+            </div>
+            <div class="card-body">
+                <canvas id="currencyChart" style="height: 300px;"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12 mb-4">
+        <div class="card">
+            <div class="card-header">
+                付款方统计
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>付款方</th>
+                                <th>收具数</th>
+                                <th>总金额</th>
+                                <th>占比</th>
+                            </tr>
+                        </thead>
+                        <tbody id="payerStats">
+                            <tr>
+                                <td colspan="4" class="text-center">加载中...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let monthlyChart = null;
+let currencyChart = null;
+
+$(document).ready(function() {
+    loadStatistics();
+    loadCharts();
+});
+
+// 加载统计数据
+async function loadStatistics() {
+    try {
+        const data = await apiRequest('/api/statistics/summary');
+        
+        $('#statTotalCount').text(data.total.count);
+        $('#statTotalAmount').text('¥' + data.total.amount.toFixed(2));
+        
+        const average = data.total.count > 0 ? data.total.amount / data.total.count : 0;
+        $('#statAverage').text('¥' + average.toFixed(2));
+        
+        // 获取最大金额（需要从列表API获取）
+        const receiptsData = await apiRequest('/api/receipts?limit=1&sort=total_amount');
+        if (receiptsData.receipts.length > 0) {
+            $('#statMaxAmount').text('¥' + receiptsData.receipts[0].total_amount.toFixed(2));
+        }
+    } catch (error) {
+        console.error('加载统计数据失败:', error);
+    }
+}
+
+// 加载图表
+async function loadCharts() {
+    await loadMonthlyChart();
+    await loadCurrencyChart();
+    await loadPayerStats();
+}
+
+// 加载月度趋势图
+async function loadMonthlyChart() {
+    try {
+        // 获取最近12个月的数据
+        const labels = [];
+        const data = [];
+        
+        for (let i = 11; i >= 0; i--) {
+            const date = new Date();
+            date.setMonth(date.getMonth() - i);
+            const monthStr = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+            labels.push(monthStr);
+            
+            // 这里应该从API获取每月数据，暂时使用模拟数据
+            data.push(Math.random() * 10000);
+        }
+        
+        const ctx = document.getElementById('monthlyChart').getContext('2d');
+        
+        if (monthlyChart) {
+            monthlyChart.destroy();
+        }
+        
+        monthlyChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '收据金额',
+                    data: data,
+                    borderColor: '#4e73df',
+                    backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: function(value) {
+                                return '¥' + value;
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('加载月度图表失败:', error);
+    }
+}
+
+// 加载币种分布图
+async function loadCurrencyChart() {
+    try {
+        const ctx = document.getElementById('currencyChart').getContext('2d');
+        
+        // 从API获取数据，暂时使用模拟数据
+        const data = {
+            'CNY': 70,
+            'USD': 20,
+            'EUR': 10
+        };
+        
+        if (currencyChart) {
+            currencyChart.destroy();
+        }
+        
+        currencyChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(data),
+                datasets: [{
+                    data: Object.values(data),
+                    backgroundColor: ['#4e73df', '#1cc88a', '#36b9cc'],
+                    hoverBackgroundColor: ['#2e59d9', '#17a673', '#2c9faf'],
+                    hoverBorderColor: "rgba(234, 236, 244, 1)",
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+    } catch (error) {
+        console.error('加载币种图表失败:', error);
+    }
+}
+
+// 加载付款方统计
+async function loadPayerStats() {
+    try {
+        // 这里应该从API获取数据，暂时使用模拟数据
+        const mockData = [
+            { payer: '张三', count: 5, amount: 15000 },
+            { payer: '李四', count: 3, amount: 8500 },
+            { payer: '王五', count: 2, amount: 4200 }
+        ];
+        
+        const total = mockData.reduce((sum, item) => sum + item.amount, 0);
+        
+        let html = '';
+        mockData.forEach(item => {
+            const percentage = ((item.amount / total) * 100).toFixed(1);
+            html += `
+                <tr>
+                    <td><strong>${item.payer}</strong></td>
+                    <td>${item.count}</td>
+                    <td><strong class="text-primary">¥${item.amount.toFixed(2)}</strong></td>
+                    <td>
+                        <div class="progress">
+                            <div class="progress-bar" role="progressbar" style="width: ${percentage}%">
+                                ${percentage}%
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        $('#payerStats').html(html);
+    } catch (error) {
+        console.error('加载付款方统计失败:', error);
+        $('#payerStats').html('<tr><td colspan="4" class="text-center text-danger">加载失败</td></tr>');
+    }
+}
+</script>
+{% endblock %}
