@@ -221,6 +221,12 @@
                     <span>数据统计</span>
                 </a>
             </li>
+            <li class="nav-item">
+                <a href="/admin" class="{% if request.path == '/admin' %}active{% endif %}">
+                    <i class="fas fa-user-shield"></i>
+                    <span>系统管理</span>
+                </a>
+            </li>
         </ul>
     </div>
     
@@ -291,13 +297,17 @@
                     },
                     ...options
                 });
-                
+
                 const data = await response.json();
-                
+
                 if (!response.ok) {
+                    if (response.status === 401 && data.need_login) {
+                        // 需要管理员登录的操作
+                        return data;
+                    }
                     throw new Error(data.error || '请求失败');
                 }
-                
+
                 return data;
             } catch (error) {
                 showAlert(error.message, 'danger');

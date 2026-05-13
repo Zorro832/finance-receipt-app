@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}系统管理 - 财务收据系统{% endblock %}
+
+{% block page_title %}系统管理{% endblock %}
+
+{% block content %}
+<!-- 未登录状态 -->
+<div id="loginSection">
+    <div class="row justify-content-center">
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header text-center">
+                    <i class="fas fa-user-shield fa-2x text-primary mb-2"></i>
+                    <h5 class="mb-0">管理员登录</h5>
+                </div>
+                <div class="card-body">
+                    <form id="loginForm">
+                        <div class="mb-3">
+                            <label class="form-label">用户名</label>
+                            <input type="text" class="form-control" id="login_username" required autocomplete="off">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">密码</label>
+                            <input type="password" class="form-control" id="login_password" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-sign-in-alt"></i> 登录
+                        </button>
+                    </form>
+                    <div class="text-center mt-3">
+                        <small class="text-muted">默认账号: admin / admin123</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 已登录状态 -->
+<div id="adminSection" style="display:none;">
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <span><i class="fas fa-user-shield"></i> 管理员面板</span>
+                    <button class="btn btn-sm btn-outline-danger" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt"></i> 退出登录
+                    </button>
+                </div>
+                <div class="card-body">
+                    <p>当前登录用户：<strong id="currentUsername"></strong></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <!-- 收据编号管理 -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-hashtag"></i> 收据编号管理
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">编号前缀</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="receipt_prefix" maxlength="10" placeholder="如 RCP">
+                            <button class="btn btn-primary" id="savePrefixBtn">保存</button>
+                        </div>
+                        <small class="text-muted">编号格式：前缀-日期-序号（如 RCP-20260513-001）</small>
+                    </div>
+                    <hr>
+                    <div class="mb-3">
+                        <label class="form-label">当前序号</label>
+                        <div class="input-group">
+                            <input type="number" class="form-control" id="current_seq" min="0">
+                            <button class="btn btn-warning" id="setSeqBtn">设置序号</button>
+                        </div>
+                        <small class="text-muted">设置后下一张收据将从此序号+1开始编号</small>
+                    </div>
+                    <hr>
+                    <div class="mb-0">
+                        <button class="btn btn-danger w-100" id="resetSeqBtn">
+                            <i class="fas fa-redo"></i> 重置编号（序号归零）
+                        </button>
+                        <small class="text-muted d-block mt-2">重置后序号从001重新开始，日期自动更新为当天</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 修改密码 -->
+        <div class="col-md-6 mb-4">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-key"></i> 修改密码
+                </div>
+                <div class="card-body">
+                    <form id="changePasswordForm">
+                        <div class="mb-3">
+                            <label class="form-label">原密码</label>
+                            <input type="password" class="form-control" id="old_password" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">新密码</label>
+                            <input type="password" class="form-control" id="new_password" required minlength="6">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">确认新密码</label>
+                            <input type="password" class="form-control" id="confirm_password" required minlength="6">
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="fas fa-save"></i> 修改密码
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let adminToken = localStorage.getItem('admin_token') || '';
+
+$(document).ready(function() {
+    checkAuth();
+
+    $('#loginForm').submit(function(e) {
+        e.preventDefault();
+        adminLogin();
+    });
+
+    $('#logoutBtn').click(adminLogout);
+    $('#savePrefixBtn').click(savePrefix);
+    $('#setSeqBtn').click(setSeq);
+    $('#resetSeqBtn').click(resetSeq);
+    $('#changePasswordForm').submit(function(e) {
+        e.preventDefault();
+        changePassword();
+    });
+});
+
+function getAuthHeaders() {
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + adminToken
+    };
+}
+
+async function checkAuth() {
+    try {
+        const resp = await fetch('/api/auth/check', {
+            headers: getAuthHeaders()
+        });
+        const data = await resp.json();
+        if (data.logged_in) {
+            $('#loginSection').hide();
+            $('#adminSection').show();
+            $('#currentUsername').text(data.username);
+            loadNumberConfig();
+        } else {
+            $('#loginSection').show();
+            $('#adminSection').hide();
+            localStorage.removeItem('admin_token');
+            adminToken = '';
+        }
+    } catch (e) {
+        $('#loginSection').show();
+        $('#adminSection').hide();
+    }
+}
+
+async function adminLogin() {
+    const username = $('#login_username').val();
+    const password = $('#login_password').val();
+
+    try {
+        showLoading();
+        const resp = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password })
+        });
+        const data = await resp.json();
+        hideLoading();
+
+        if (data.success) {
+            adminToken = data.token;
+            localStorage.setItem('admin_token', adminToken);
+            showAlert('登录成功', 'success');
+            checkAuth();
+        } else {
+            showAlert(data.error || '登录失败', 'danger');
+        }
+    } catch (e) {
+        hideLoading();
+        showAlert('登录失败', 'danger');
+    }
+}
+
+async function adminLogout() {
+    try {
+        await fetch('/api/auth/logout', {
+            method: 'POST',
+            headers: getAuthHeaders()
+        });
+    } catch (e) {}
+    adminToken = '';
+    localStorage.removeItem('admin_token');
+    showAlert('已退出登录', 'info');
+    checkAuth();
+}
+
+async function loadNumberConfig() {
+    try {
+        const resp = await fetch('/api/admin/receipt-number-config', {
+            headers: getAuthHeaders()
+        });
+        if (resp.status === 401) {
+            checkAuth();
+            return;
+        }
+        const data = await resp.json();
+        $('#receipt_prefix').val(data.prefix);
+        $('#current_seq').val(data.seq);
+    } catch (e) {}
+}
+
+async function savePrefix() {
+    const prefix = $('#receipt_prefix').val().trim();
+    if (!prefix) {
+        showAlert('前缀不能为空', 'danger');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/admin/receipt-number-config', {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ prefix: prefix })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showAlert('前缀已保存为: ' + data.prefix, 'success');
+            loadNumberConfig();
+        } else {
+            showAlert(data.error || '保存失败', 'danger');
+        }
+    } catch (e) {
+        showAlert('保存失败', 'danger');
+    }
+}
+
+async function setSeq() {
+    const seq = parseInt($('#current_seq').val());
+    if (isNaN(seq) || seq < 0) {
+        showAlert('请输入有效序号', 'danger');
+        return;
+    }
+    try {
+        const resp = await fetch('/api/admin/receipt-number-config', {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ set_seq: seq })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showAlert('序号已设置为: ' + data.seq + '，下一张收据编号将从 ' + (data.seq + 1) + ' 开始', 'success');
+            loadNumberConfig();
+        } else {
+            showAlert(data.error || '设置失败', 'danger');
+        }
+    } catch (e) {
+        showAlert('设置失败', 'danger');
+    }
+}
+
+async function resetSeq() {
+    if (!confirm('确定要重置编号吗？序号将从001重新开始。')) return;
+    try {
+        const resp = await fetch('/api/admin/receipt-number-config', {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ reset_seq: true })
+        });
+        const data = await resp.json();
+        if (data.success) {
+            showAlert('编号已重置', 'success');
+            loadNumberConfig();
+        } else {
+            showAlert(data.error || '重置失败', 'danger');
+        }
+    } catch (e) {
+        showAlert('重置失败', 'danger');
+    }
+}
+
+async function changePassword() {
+    const old_password = $('#old_password').val();
+    const new_password = $('#new_password').val();
+    const confirm_password = $('#confirm_password').val();
+
+    if (new_password !== confirm_password) {
+        showAlert('两次输入的新密码不一致', 'danger');
+        return;
+    }
+    if (new_password.length < 6) {
+        showAlert('新密码至少6位', 'danger');
+        return;
+    }
+
+    try {
+        showLoading();
+        const resp = await fetch('/api/auth/change-password', {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ old_password, new_password })
+        });
+        const data = await resp.json();
+        hideLoading();
+        if (data.success) {
+            showAlert('密码修改成功', 'success');
+            $('#changePasswordForm')[0].reset();
+        } else {
+            showAlert(data.error || '修改失败', 'danger');
+        }
+    } catch (e) {
+        hideLoading();
+        showAlert('修改失败', 'danger');
+    }
+}
+</script>
+{% endblock %}

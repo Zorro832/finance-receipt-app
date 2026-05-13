@@ -6,7 +6,7 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-lg-8">
+    <div class="col-lg-6">
         <div class="card">
             <div class="card-header">收据信息</div>
             <div class="card-body">
@@ -26,7 +26,7 @@
                             <input type="date" class="form-control" id="payment_date" required>
                         </div>
                     </div>
-                    
+
                     <h6 class="mb-3 text-primary">付款人信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-8">
@@ -39,7 +39,7 @@
                             <input type="text" class="form-control" id="payer_tax_id">
                         </div>
                     </div>
-                    
+
                     <h6 class="mb-3 text-primary">收款人信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-8">
@@ -52,7 +52,7 @@
                             <input type="text" class="form-control" id="payee_tax_id">
                         </div>
                     </div>
-                    
+
                     <h6 class="mb-3 text-primary">收款信息</h6>
                     <div class="row mb-3">
                         <div class="col-md-6">
@@ -70,7 +70,7 @@
                             <input type="number" class="form-control" id="tax_rate" step="0.01" min="0" max="100" value="0">
                         </div>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label class="form-label">税额</label>
@@ -81,27 +81,34 @@
                             <input type="text" class="form-control" id="total_amount" readonly style="font-weight: bold; color: #d32f2f;">
                         </div>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <label class="form-label">收款事由 <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="purpose" rows="3" required></textarea>
+                            <textarea class="form-control" id="purpose" rows="3" required placeholder="如：社保、公积金、工资（用顿号分隔多项）"></textarea>
                         </div>
                     </div>
-                    
+
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <label class="form-label">备注</label>
                             <textarea class="form-control" id="notes" rows="2"></textarea>
                         </div>
                     </div>
-                    
+
+                    <div class="row mb-3">
+                        <div class="col-md-12">
+                            <label class="form-label">开具人</label>
+                            <input type="text" class="form-control" id="issuer" placeholder="留空则不显示">
+                        </div>
+                    </div>
+
                     <div class="text-center mt-4">
                         <button type="submit" class="btn btn-primary btn-lg">
                             <i class="fas fa-save"></i> 保存收据
                         </button>
                         <button type="button" class="btn btn-success btn-lg ms-3" id="saveAndPdfBtn">
-                            <i class="fas fa-file-pdf"></i> 保存并生成PDF
+                            <i class="fas fa-file-pdf"></i> 保存并预览PDF
                         </button>
                         <button type="reset" class="btn btn-secondary btn-lg ms-3">
                             <i class="fas fa-redo"></i> 重置
@@ -111,13 +118,18 @@
             </div>
         </div>
     </div>
-    
-    <div class="col-lg-4">
+
+    <div class="col-lg-6">
         <div class="card sticky-top" style="top: 20px;">
-            <div class="card-header">实时预览</div>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <span>实时预览</span>
+                <button class="btn btn-sm btn-outline-primary" id="refreshPreviewBtn">
+                    <i class="fas fa-sync-alt"></i> 刷新预览
+                </button>
+            </div>
             <div class="card-body" style="max-height: 800px; overflow-y: auto;">
                 <div id="receiptPreview">
-                    <div class="text-center text-muted">
+                    <div class="text-center text-muted py-5">
                         <i class="fas fa-file-alt fa-3x mb-3"></i>
                         <p>填写表单以预览收据</p>
                     </div>
@@ -130,24 +142,33 @@
 
 {% block extra_js %}
 <script>
+let previewTimer = null;
+
 $(document).ready(function() {
     $('#payment_date').val(new Date().toISOString().split('T')[0]);
-    
+
     $('#generateNumberBtn').click(generateReceiptNumber);
     $('#amount, #tax_rate').on('input', calculateTax);
     $('#receiptForm').submit(function(e) { e.preventDefault(); saveReceipt(false); });
     $('#saveAndPdfBtn').click(function() { saveReceipt(true); });
-    
+    $('#refreshPreviewBtn').click(refreshPreview);
+
+    // 自动预览 - 输入变化时更新
+    $('#receiptForm input, #receiptForm textarea, #receiptForm select').on('input change', function() {
+        clearTimeout(previewTimer);
+        previewTimer = setTimeout(refreshPreview, 800);
+    });
+
     // 付款人自动搜索
     $('#payer_name').on('input', function() {
         searchPayers($(this).val());
     });
-    
+
     // 收款人自动搜索
     $('#payee_name').on('input', function() {
         searchPayees($(this).val());
     });
-    
+
     // 点击外部关闭建议列表
     $(document).click(function(e) {
         if (!$(e.target).closest('#payer_name, #payerSuggestions').length) {
@@ -157,6 +178,9 @@ $(document).ready(function() {
             $('#payeeSuggestions').hide();
         }
     });
+
+    // 初始加载预览
+    setTimeout(refreshPreview, 500);
 });
 
 async function searchPayers(keyword) {
@@ -186,6 +210,7 @@ function selectPayer(name, taxId) {
     $('#payer_name').val(name);
     $('#payer_tax_id').val(taxId);
     $('#payerSuggestions').hide();
+    refreshPreview();
 }
 
 async function searchPayees(keyword) {
@@ -215,12 +240,14 @@ function selectPayee(name, taxId) {
     $('#payee_name').val(name);
     $('#payee_tax_id').val(taxId);
     $('#payeeSuggestions').hide();
+    refreshPreview();
 }
 
 async function generateReceiptNumber() {
     try {
         const data = await apiRequest('/api/receipts/generate-number');
         $('#receipt_number').val(data.receipt_number);
+        refreshPreview();
     } catch (error) {}
 }
 
@@ -231,6 +258,48 @@ function calculateTax() {
     const totalAmount = amount + taxAmount;
     $('#tax_amount').val('¥' + taxAmount.toFixed(2));
     $('#total_amount').val('¥' + totalAmount.toFixed(2));
+}
+
+async function refreshPreview() {
+    const formData = {
+        receipt_number: $('#receipt_number').val() || '(自动生成)',
+        payer_name: $('#payer_name').val() || '(未填写)',
+        payer_tax_id: $('#payer_tax_id').val() || '',
+        amount: parseFloat($('#amount').val()) || 0,
+        currency: $('#currency').val(),
+        payment_date: $('#payment_date').val() || new Date().toISOString().split('T')[0],
+        purpose: $('#purpose').val() || '',
+        payee_name: $('#payee_name').val() || '(未填写)',
+        payee_tax_id: $('#payee_tax_id').val() || '',
+        tax_rate: parseFloat($('#tax_rate').val()) || 0,
+        notes: $('#notes').val() || '',
+        issuer: $('#issuer').val() || ''
+    };
+
+    // 计算金额
+    const amount = formData.amount;
+    const taxRate = formData.tax_rate;
+    formData.tax_amount = Math.round(amount * taxRate / 100 * 100) / 100;
+    formData.total_amount = Math.round((amount + formData.tax_amount) * 100) / 100;
+
+    try {
+        const resp = await fetch('/api/receipts/preview-html', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(formData)
+        });
+
+        if (resp.ok) {
+            const html = await resp.text();
+            $('#receiptPreview').html(`
+                <div style="border:1px solid #ddd; border-radius:8px; padding:10px; background:#fff;">
+                    ${html}
+                </div>
+            `);
+        }
+    } catch (e) {
+        // 静默失败
+    }
 }
 
 async function saveReceipt(generatePdf) {
@@ -245,9 +314,10 @@ async function saveReceipt(generatePdf) {
         payee_name: $('#payee_name').val(),
         payee_tax_id: $('#payee_tax_id').val(),
         tax_rate: parseFloat($('#tax_rate').val()) || 0,
-        notes: $('#notes').val()
+        notes: $('#notes').val(),
+        issuer: $('#issuer').val()
     };
-    
+
     try {
         showLoading();
         const data = await apiRequest('/api/receipts', {
@@ -256,11 +326,15 @@ async function saveReceipt(generatePdf) {
         });
         hideLoading();
         showAlert('收据保存成功！', 'success');
-        if (generatePdf) {
-            window.open(`/api/receipts/${data.receipt_id}/pdf`, '_blank');
+        if (generatePdf && data.receipt_id) {
+            window.location.href = '/receipt/' + data.receipt_id;
+        } else {
+            $('#receiptForm')[0].reset();
+            $('#payment_date').val(new Date().toISOString().split('T')[0]);
+            $('#tax_amount').val('');
+            $('#total_amount').val('');
+            refreshPreview();
         }
-        $('#receiptForm')[0].reset();
-        $('#payment_date').val(new Date().toISOString().split('T')[0]);
     } catch (error) {
         hideLoading();
     }

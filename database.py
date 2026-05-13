@@ -37,90 +37,9 @@ def get_default_template_data():
 
 
 def get_default_template_html():
-    return """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<style>
-@page { size: A4; margin: 1.5cm; }
-body { font-family: "SimSun", "宋体", serif; font-size: 14px; line-height: 1.6; }
-.receipt { width: 100%; max-width: 800px; margin: 0 auto; }
-.header { text-align: center; margin-bottom: 20px; }
-.company-name { font-size: 24px; font-weight: bold; }
-.receipt-title { font-size: 20px; font-weight: bold; margin-top: 5px; }
-.info-row { display: flex; justify-content: space-between; margin: 10px 0; font-size: 13px; }
-.info-row .left { text-align: left; }
-.info-row .right { text-align: right; }
-.main-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-.main-table td, .main-table th { border: 1px solid #333; padding: 8px; text-align: center; }
-.main-table .label { background: #f5f5f5; font-weight: bold; }
-.main-table .left-align { text-align: left; }
-.main-table .right-align { text-align: right; }
-.total-row { font-weight: bold; }
-.total-row .amount { font-size: 16px; color: #000; }
-.footer-row { font-size: 12px; }
-.sign-area { display: flex; justify-content: space-between; margin-top: 30px; padding: 0 20px; }
-.sign-area .sign-box { text-align: center; }
-.sign-area .sign-line { border-top: 1px solid #333; width: 120px; margin-top: 30px; padding-top: 5px; }
-.bottom-note { margin-top: 20px; font-size: 11px; color: #666; text-align: center; }
-</style>
-</head>
-<body>
-<div class="receipt">
-<div class="header">
-<div class="company-name">北京厚泽人力资源有限公司</div>
-<div class="receipt-title">电子收据</div>
-</div>
-<div class="info-row">
-<div class="left">填制日期：{{ payment_date }}</div>
-<div class="right">票号：{{ receipt_number }}</div>
-</div>
-<table class="main-table">
-<tr>
-<td class="label" rowspan="2" style="width:40px;">付款人</td>
-<td class="label left-align">名称：</td>
-<td class="left-align" colspan="2">{{ payer_name }}</td>
-<td class="label" rowspan="2" style="width:40px;">收款人</td>
-<td class="label left-align">名称：</td>
-<td class="left-align" colspan="2">{{ payee_name }}</td>
-</tr>
-<tr>
-<td class="label left-align">统一社会信用代码：</td>
-<td class="left-align" colspan="2">{{ payer_tax_id }}</td>
-<td class="label left-align">统一社会信用代码：</td>
-<td class="left-align" colspan="2">{{ payee_tax_id }}</td>
-</tr>
-<tr>
-<td class="label" colspan="4">收款内容</td>
-<td class="label" colspan="4">金额</td>
-</tr>
-{{ items_html }}
-<tr class="total-row">
-<td class="label" colspan="2">合计金额（大写）：</td>
-<td class="left-align" colspan="2">{{ total_amount_cn }}</td>
-<td class="label" colspan="2">合计金额（小写）：</td>
-<td class="right-align amount" colspan="2">{{ total_amount }}</td>
-</tr>
-<tr class="footer-row">
-<td class="label" colspan="2">备注</td>
-<td class="left-align" colspan="6">{{ notes }}</td>
-</tr>
-</table>
-<div class="sign-area">
-<div class="sign-box">
-<div>开具人：{{ issuer }}</div>
-</div>
-<div class="sign-box">
-<div class="sign-line">收款单位（盖章）</div>
-</div>
-</div>
-<div class="bottom-note">
-<p>本收据仅作对账使用，款项未实际到账前不视为已收款。</p>
-<p>本收据由【快收据】平台开具，【腾讯云CA】认证，您可微信扫码或访问https://ksj.yimion.com 查验。</p>
-</div>
-</div>
-</body>
-</html>"""
+    # 导入pdf_generator中的模板，保持一致
+    from pdf_generator import get_default_template_html as _get_tpl
+    return _get_tpl()
 
 
 class Database:
@@ -251,6 +170,28 @@ class Database:
         return False
 
     def generate_receipt_number(self) -> str:
+        # 优先使用管理员配置的编号规则
+        admin_config_path = os.path.join(DATA_DIR, "admin.json")
+        if os.path.exists(admin_config_path):
+            with open(admin_config_path, "r", encoding="utf-8") as fp:
+                admin_config = json.load(fp)
+            prefix = admin_config.get("receipt_prefix", "RCP")
+            seq = admin_config.get("receipt_seq", 0)
+            today = datetime.now().strftime("%Y%m%d")
+
+            # 如果日期变了，重置序号
+            if admin_config.get("last_reset_date") != today:
+                seq = 0
+
+            seq += 1
+            admin_config["receipt_seq"] = seq
+            admin_config["last_reset_date"] = today
+            with open(admin_config_path, "w", encoding="utf-8") as fp:
+                json.dump(admin_config, fp, ensure_ascii=False, indent=2)
+
+            return f"{prefix}-{today}-{seq:03d}"
+
+        # 默认逻辑
         today = datetime.now().strftime("%Y%m%d")
         receipts = self._read_json(RECEIPTS_FILE)
         count = sum(1 for r in receipts if r.get("receipt_number", "").startswith(f"RCP-{today}-"))

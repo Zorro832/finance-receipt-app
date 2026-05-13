@@ -7,3 +7,5 @@ dist/
 build/
 *.spec
 test_receipt*.pdf
+data/admin.json
+data/sessions.json
