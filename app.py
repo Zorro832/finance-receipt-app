@@ -3,10 +3,10 @@
 Flask主应用
 实现所有API接口和前端页面路由
 """
-from flask import Flask, request, jsonify, render_template, send_file, make_response
+from flask import Flask, request, jsonify, render_template, send_file
 from flask_cors import CORS
 import pdf_generator
-import os, json
+import os
 from datetime import datetime
 from database import Database
 
@@ -20,17 +20,17 @@ db = Database()
 # ==================== 前端页面路由 ====================
 
 @app.route('/')
-def index):
+def index():
     """首页 - 仪表盘"""
     return render_template('dashboard.html')
 
 @app.route('/generate')
-def generate):
+def generate():
     """收据生成页面"""
     return render_template('generate.html')
 
 @app.route('/receipts')
-def receipt_list):
+def receipt_list():
     """收据列表页面"""
     return render_template('receipts.html')
 
@@ -40,19 +40,19 @@ def receipt_detail(receipt_id):
     return render_template('receipt_detail.html', receipt_id=receipt_id)
 
 @app.route('/templates')
-def templates_page):
+def templates_page():
     """模板管理页面"""
     return render_template('templates.html')
 
 @app.route('/statistics')
-def statistics_page):
+def statistics_page():
     """数据统计页面"""
     return render_template('statistics.html')
 
 # ==================== 收据管理API ====================
 
 @app.route('/api/receipts', methods=['GET'])
-def get_receipts):
+def get_receipts():
     try:
         page = request.args.get('page', 1, type=int)
         limit = request.args.get('limit', 20, type=int)
@@ -70,7 +70,7 @@ def get_receipts):
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/receipts', methods=['POST'])
-def create_receipt):
+def create_receipt():
     try:
         data = request.get_json(force=True)
         required_fields = ['payer_name', 'amount', 'payment_date', 'purpose', 'payee_name']
@@ -150,14 +150,14 @@ def generate_number():
 # ==================== 模板管理API ====================
 
 @app.route('/api/templates', methods=['GET'])
-def get_templates):
+def get_templates():
     try:
         return jsonify({'templates': db.get_templates()})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/templates', methods=['POST'])
-def create_template):
+def create_template():
     try:
         data = request.get_json(force=True)
         if 'name' not in data or not data['name']:
@@ -172,7 +172,7 @@ def create_template):
 # ==================== 统计API ====================
 
 @app.route('/api/statistics/summary', methods=['GET'])
-def get_statistics_summary):
+def get_statistics_summary():
     try:
         return jsonify(db.get_statistics_summary())
     except Exception as e:
