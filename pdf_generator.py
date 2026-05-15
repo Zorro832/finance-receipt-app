@@ -237,7 +237,7 @@ h3 {
 </head>
 <body>
 <div class="receipt-wrap">
-    <h2>北京厚泽人力资源有限公司</h2>
+    <h2>天津俊途企业管理咨询有限公司</h2>
     <h3>电 子 收 据</h3>
 
     <table class="info-row" cellpadding="0" cellspacing="0">

@@ -53,22 +53,15 @@
                         </div>
                     </div>
 
-                    <h6 class="mb-3 text-primary">收款信息</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">金额 <span class="text-danger">*</span></label>
-                            <div class="input-group">
-                                <select class="form-select" id="currency" style="max-width: 100px;">
-                                    <option value="CNY">¥ CNY</option>
-                                    <option value="USD">$ USD</option>
-                                </select>
-                                <input type="number" class="form-control" id="amount" step="0.01" min="0" required>
-                            </div>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">税率 (%)</label>
-                            <input type="number" class="form-control" id="tax_rate" step="0.01" min="0" max="100" value="0">
-                        </div>
+                    <h6 class="mb-3 text-primary">收款项目（分条填写）</h6>
+                    <div id="itemsContainer">
+                        <!-- 动态项目行会插入这里 -->
+                    </div>
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-sm btn-outline-success" id="addItemBtn">
+                            <i class="fas fa-plus"></i> 添加项目
+                        </button>
+                        <small class="text-muted ms-2">至少填写一个项目</small>
                     </div>
 
                     <div class="row mb-3">
@@ -79,13 +72,6 @@
                         <div class="col-md-6">
                             <label class="form-label">总金额</label>
                             <input type="text" class="form-control" id="total_amount" readonly style="font-weight: bold; color: #d32f2f;">
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label class="form-label">收款事由 <span class="text-danger">*</span></label>
-                            <textarea class="form-control" id="purpose" rows="3" required placeholder="如：社保、公积金、工资（用顿号分隔多项）"></textarea>
                         </div>
                     </div>
 
@@ -110,7 +96,7 @@
                         <button type="button" class="btn btn-success btn-lg ms-3" id="saveAndPdfBtn">
                             <i class="fas fa-file-pdf"></i> 保存并预览PDF
                         </button>
-                        <button type="reset" class="btn btn-secondary btn-lg ms-3">
+                        <button type="reset" class="btn btn-secondary btn-lg ms-3" id="resetBtn">
                             <i class="fas fa-redo"></i> 重置
                         </button>
                     </div>
@@ -143,18 +129,33 @@
 {% block extra_js %}
 <script>
 let previewTimer = null;
+let itemIndex = 0;
 
 $(document).ready(function() {
     $('#payment_date').val(new Date().toISOString().split('T')[0]);
 
+    // 初始化一个空项目行
+    addItemRow();
+
     $('#generateNumberBtn').click(generateReceiptNumber);
-    $('#amount, #tax_rate').on('input', calculateTax);
+    $('#addItemBtn').click(function() { addItemRow(); });
     $('#receiptForm').submit(function(e) { e.preventDefault(); saveReceipt(false); });
     $('#saveAndPdfBtn').click(function() { saveReceipt(true); });
+    $('#resetBtn').click(function() {
+        setTimeout(function() {
+            $('#itemsContainer').empty();
+            itemIndex = 0;
+            addItemRow();
+            $('#payment_date').val(new Date().toISOString().split('T')[0]);
+            $('#tax_amount').val('');
+            $('#total_amount').val('');
+            refreshPreview();
+        }, 50);
+    });
     $('#refreshPreviewBtn').click(refreshPreview);
 
-    // 自动预览 - 输入变化时更新
-    $('#receiptForm input, #receiptForm textarea, #receiptForm select').on('input change', function() {
+    // 自动预览
+    $(document).on('input change', '#receiptForm input, #receiptForm textarea, #receiptForm select', function() {
         clearTimeout(previewTimer);
         previewTimer = setTimeout(refreshPreview, 800);
     });
@@ -179,10 +180,65 @@ $(document).ready(function() {
         }
     });
 
-    // 初始加载预览
     setTimeout(refreshPreview, 500);
 });
 
+// ========== 动态项目行 ==========
+function addItemRow(name, amount) {
+    name = name || '';
+    amount = amount || '';
+    const idx = itemIndex++;
+    const html = `
+        <div class="row mb-2 item-row" data-idx="${idx}">
+            <div class="col-md-6">
+                <input type="text" class="form-control item-name" placeholder="项目名称（如：社保）" value="${name}">
+            </div>
+            <div class="col-md-4">
+                <input type="number" class="form-control item-amount" placeholder="金额" step="0.01" min="0" value="${amount}">
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="删除此行">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    `;
+    $('#itemsContainer').append(html);
+}
+
+$(document).on('click', '.remove-item-btn', function() {
+    const rows = $('#itemsContainer .item-row');
+    if (rows.length <= 1) {
+        alert('至少保留一个项目');
+        return;
+    }
+    $(this).closest('.item-row').remove();
+    refreshPreview();
+});
+
+// ========== 收集项目数据 ==========
+function getItems() {
+    const items = [];
+    $('#itemsContainer .item-row').each(function() {
+        const name = $(this).find('.item-name').val().trim();
+        const amount = $(this).find('.item-amount').val();
+        if (name) {
+            items.push({ name: name, amount: amount ? parseFloat(amount) : 0 });
+        }
+    });
+    return items;
+}
+
+function getTotalAmount() {
+    const items = getItems();
+    let total = 0;
+    items.forEach(function(item) {
+        total += item.amount;
+    });
+    return total;
+}
+
+// ========== 搜索功能 ==========
 async function searchPayers(keyword) {
     if (keyword.length < 1) {
         $('#payerSuggestions').hide();
@@ -243,6 +299,7 @@ function selectPayee(name, taxId) {
     refreshPreview();
 }
 
+// ========== 编号和金额 ==========
 async function generateReceiptNumber() {
     try {
         const data = await apiRequest('/api/receipts/generate-number');
@@ -252,35 +309,41 @@ async function generateReceiptNumber() {
 }
 
 function calculateTax() {
-    const amount = parseFloat($('#amount').val()) || 0;
-    const taxRate = parseFloat($('#tax_rate').val()) || 0;
-    const taxAmount = amount * taxRate / 100;
+    const amount = getTotalAmount();
+    const taxRate = parseFloat($('#receiptForm select[name="tax_rate"]').length ? $('#tax_rate').val() : 0) || 0;
+    // 税率输入框不在原位置，用隐藏字段或去掉税率功能
+    const taxAmount = 0; // 简化为无税率
     const totalAmount = amount + taxAmount;
-    $('#tax_amount').val('¥' + taxAmount.toFixed(2));
+    $('#tax_amount').val('');
     $('#total_amount').val('¥' + totalAmount.toFixed(2));
 }
 
+// ========== 预览 ==========
 async function refreshPreview() {
+    const items = getItems();
+    const total = getTotalAmount();
+
+    // 构造 purpose 字符串：名称：金额
+    const purposeStr = items.map(function(item) {
+        return item.name + '：' + (item.amount || '');
+    }).join('、');
+
     const formData = {
         receipt_number: $('#receipt_number').val() || '(自动生成)',
         payer_name: $('#payer_name').val() || '(未填写)',
         payer_tax_id: $('#payer_tax_id').val() || '',
-        amount: parseFloat($('#amount').val()) || 0,
-        currency: $('#currency').val(),
+        amount: total,
+        currency: 'CNY',
         payment_date: $('#payment_date').val() || new Date().toISOString().split('T')[0],
-        purpose: $('#purpose').val() || '',
+        purpose: purposeStr,
         payee_name: $('#payee_name').val() || '(未填写)',
         payee_tax_id: $('#payee_tax_id').val() || '',
-        tax_rate: parseFloat($('#tax_rate').val()) || 0,
+        tax_rate: 0,
+        tax_amount: 0,
+        total_amount: total,
         notes: $('#notes').val() || '',
         issuer: $('#issuer').val() || ''
     };
-
-    // 计算金额
-    const amount = formData.amount;
-    const taxRate = formData.tax_rate;
-    formData.tax_amount = Math.round(amount * taxRate / 100 * 100) / 100;
-    formData.total_amount = Math.round((amount + formData.tax_amount) * 100) / 100;
 
     try {
         const resp = await fetch('/api/receipts/preview-html', {
@@ -297,23 +360,35 @@ async function refreshPreview() {
                 </div>
             `);
         }
-    } catch (e) {
-        // 静默失败
-    }
+    } catch (e) {}
 }
 
+// ========== 保存 ==========
 async function saveReceipt(generatePdf) {
+    const items = getItems();
+    if (items.length === 0) {
+        showAlert('请至少填写一个收款项目', 'danger');
+        return;
+    }
+
+    const total = getTotalAmount();
+    const purposeStr = items.map(function(item) {
+        return item.name + '：' + item.amount;
+    }).join('、');
+
     const formData = {
         receipt_number: $('#receipt_number').val(),
         payer_name: $('#payer_name').val(),
         payer_tax_id: $('#payer_tax_id').val(),
-        amount: parseFloat($('#amount').val()),
-        currency: $('#currency').val(),
+        amount: total,
+        currency: 'CNY',
         payment_date: $('#payment_date').val(),
-        purpose: $('#purpose').val(),
+        purpose: purposeStr,
         payee_name: $('#payee_name').val(),
         payee_tax_id: $('#payee_tax_id').val(),
-        tax_rate: parseFloat($('#tax_rate').val()) || 0,
+        tax_rate: 0,
+        tax_amount: 0,
+        total_amount: total,
         notes: $('#notes').val(),
         issuer: $('#issuer').val()
     };
@@ -330,6 +405,9 @@ async function saveReceipt(generatePdf) {
             window.location.href = '/receipt/' + data.receipt_id;
         } else {
             $('#receiptForm')[0].reset();
+            $('#itemsContainer').empty();
+            itemIndex = 0;
+            addItemRow();
             $('#payment_date').val(new Date().toISOString().split('T')[0]);
             $('#tax_amount').val('');
             $('#total_amount').val('');

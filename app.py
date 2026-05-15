@@ -342,9 +342,6 @@ def generate_receipt_pdf(receipt_id):
             return jsonify({'error': '收据不存在'}), 404
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
-        # 如果模板包含不兼容CSS，使用最新模板
-        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
-            template_html = pdf_generator.get_default_template_html()
         pdf_path = pdf_generator.generate_pdf(receipt, template_html)
 
         # 判断是否内联预览
@@ -368,8 +365,6 @@ def preview_receipt_html(receipt_id):
             return jsonify({'error': '收据不存在'}), 404
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
-        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
-            template_html = pdf_generator.get_default_template_html()
         html_content = pdf_generator.render_template(template_html or pdf_generator.get_default_template_html(), receipt)
         return html_content
     except Exception as e:
@@ -390,8 +385,6 @@ def preview_receipt_from_data():
 
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
-        if template_html and ('SimSun' in template_html or 'display: flex' in template_html):
-            template_html = pdf_generator.get_default_template_html()
         html_content = pdf_generator.render_template(template_html or pdf_generator.get_default_template_html(), data)
         return html_content
     except Exception as e:
@@ -492,7 +485,7 @@ def batch_import():
                     'currency': 'CNY',
                     'payment_date': str(payment_date) if payment_date else datetime.now().strftime('%Y-%m-%d'),
                     'purpose': '、'.join([i['name'] + '：' + str(i['amount']) for i in items]),
-                    'payee_name': str(payee_name) if payee_name else '北京厚泽人力资源有限公司',
+                    'payee_name': str(payee_name) if payee_name else '天津俊途企业管理咨询有限公司',
                     'payee_tax_id': str(payee_tax_id) if payee_tax_id else '',
                     'tax_rate': 0,
                     'tax_amount': 0,
@@ -529,7 +522,7 @@ def download_template():
 
         # 示例数据
         example = ['2026-05-13', '天津俊途企业管理咨询有限公司', '9112010175484682X1',
-                   '北京厚泽人力资源有限公司', '911101055825295879',
+                   '天津俊途企业管理咨询有限公司', '9112010175484682X1',
                    '', '', '23399.77', '', '', '', '', '23399.77', 'C0247CL001171EZ\n2026.1']
         ws.append(example)
 
@@ -591,6 +584,57 @@ def not_found(e):
 @app.errorhandler(500)
 def internal_error(e):
     return jsonify({'error': '服务器内部错误'}), 500
+
+
+
+
+# ==================== 模板更新/删除API ====================
+
+@app.route('/api/templates/<int:template_id>', methods=['PUT'])
+@require_auth
+def update_template(template_id):
+    try:
+        data = request.get_json(force=True)
+        templates = db.get_templates()
+        for t in templates:
+            if t['id'] == template_id:
+                if 'name' in data:
+                    t['name'] = data['name']
+                if 'description' in data:
+                    t['description'] = data['description']
+                if 'template_html' in data:
+                    t['template_html'] = data['template_html']
+                if data.get('is_default'):
+                    for tt in templates:
+                        tt['is_default'] = (tt['id'] == template_id)
+                t['updated_at'] = datetime.now().isoformat()
+                db._write_json(db.TEMPLATES_FILE, templates)
+                return jsonify({'success': True})
+        return jsonify({'error': '模板不存在'}), 404
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/templates/<int:template_id>', methods=['DELETE'])
+@require_auth
+def delete_template(template_id):
+    try:
+        templates = db.get_templates()
+        target = None
+        for t in templates:
+            if t['id'] == template_id:
+                target = t
+                break
+        if not target:
+            return jsonify({'error': '模板不存在'}), 404
+        if target.get('is_default'):
+            return jsonify({'error': '不能删除默认模板'}), 400
+        new_templates = [t for t in templates if t['id'] != template_id]
+        db._write_json(db.TEMPLATES_FILE, new_templates)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 
 
 if __name__ == '__main__':

@@ -42,7 +42,7 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">HTML模板 <span class="text-danger">*</span></label>
-                        <textarea class="form-control" id="template_html" rows="15" required 
+                        <textarea class="form-control" id="template_html" rows="15" required
                             placeholder="使用 {{ 变量名 }} 作为占位符，可用变量：receipt_number, payer_name, payer_tax_id, amount, currency_symbol, payment_date, purpose, payee_name, payee_tax_id, tax_rate, tax_amount, total_amount, notes, created_at"></textarea>
                         <small class="text-muted">提示：使用HTML和CSS设计收据样式，变量用双大括号包裹</small>
                     </div>
@@ -78,22 +78,31 @@
 
 {% block extra_js %}
 <script>
+let adminToken = localStorage.getItem('admin_token') || '';
+
 $(document).ready(function() {
     loadTemplates();
-    
+
     // 创建模板按钮
     $('#createTemplateBtn').click(function() {
         $('#modalTitle').text('创建模板');
         $('#templateForm')[0].reset();
         $('#template_id').val('');
+        // 自动填入默认模板内容
+        fetch('/api/templates')
+            .then(r => r.json())
+            .then(d => {
+                const def = d.templates.find(t => t.is_default);
+                if (def) $('#template_html').val(def.template_html);
+            });
         $('#templateModal').modal('show');
     });
-    
+
     // 保存模板
     $('#saveTemplateBtn').click(saveTemplate);
 });
 
-// 加载模板列表
+// ========== 加载模板列表 ==========
 async function loadTemplates() {
     try {
         const data = await apiRequest('/api/templates');
@@ -104,13 +113,13 @@ async function loadTemplates() {
     }
 }
 
-// 渲染模板列表
+// ========== 渲染模板列表 ==========
 function renderTemplates(templates) {
     if (templates.length === 0) {
         $('#templatesContainer').html('<div class="col-12"><div class="alert alert-info">暂无模板，请创建第一个模板</div></div>');
         return;
     }
-    
+
     let html = '';
     templates.forEach(template => {
         html += `
@@ -124,7 +133,8 @@ function renderTemplates(templates) {
                     </div>
                     <div class="card-body">
                         <p class="card-text text-muted">${template.description || '暂无描述'}</p>
-                        <small class="text-muted">创建时间: ${template.created_at}</small>
+                        <small class="text-muted">创建: ${template.created_at ? template.created_at.substring(0,10) : ''}</small>
+                        ${template.updated_at ? '<br><small class="text-muted">更新: '+template.updated_at.substring(0,10)+'</small>' : ''}
                     </div>
                     <div class="card-footer">
                         <button class="btn btn-sm btn-info" onclick="previewTemplate(${template.id})">
@@ -135,9 +145,9 @@ function renderTemplates(templates) {
                         </button>
                         ${!template.is_default ? `
                             <button class="btn btn-sm btn-success" onclick="setDefaultTemplate(${template.id})">
-                                <i class="fas fa-check"></i> 设为默认
+                                <i class="fas fa-check"></i> 默认
                             </button>
-                            <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${template.id})">
+                            <button class="btn btn-sm btn-danger" onclick="deleteTemplate(${template.id}, '${template.name}')">
                                 <i class="fas fa-trash"></i>
                             </button>
                         ` : ''}
@@ -146,11 +156,11 @@ function renderTemplates(templates) {
             </div>
         `;
     });
-    
+
     $('#templatesContainer').html(html);
 }
 
-// 保存模板
+// ========== 保存模板（新建/更新） ==========
 async function saveTemplate() {
     const templateId = $('#template_id').val();
     const data = {
@@ -159,20 +169,22 @@ async function saveTemplate() {
         template_html: $('#template_html').val(),
         is_default: $('#template_is_default').is(':checked') ? 1 : 0
     };
-    
+
     if (!data.name || !data.template_html) {
         showAlert('请填写完整信息', 'warning');
         return;
     }
-    
+
     try {
         showLoading();
-        
+
         if (templateId) {
             // 更新模板
-            showAlert('更新功能开发中...', 'info');
-            hideLoading();
-            return;
+            await fetch(`/api/templates/${templateId}`, {
+                method: 'PUT',
+                headers: getAuthHeaders(),
+                body: JSON.stringify(data)
+            });
         } else {
             // 创建模板
             await apiRequest('/api/templates', {
@@ -180,7 +192,7 @@ async function saveTemplate() {
                 body: JSON.stringify(data)
             });
         }
-        
+
         hideLoading();
         showAlert('模板保存成功', 'success');
         $('#templateModal').modal('hide');
@@ -191,27 +203,114 @@ async function saveTemplate() {
     }
 }
 
-// 预览模板
+// ========== 预览模板 ==========
 async function previewTemplate(templateId) {
-    showAlert('预览功能开发中...', 'info');
-}
+    try {
+        const data = await apiRequest('/api/templates');
+        const template = data.templates.find(t => t.id === templateId);
+        if (!template) return;
 
-// 编辑模板
-async function editTemplate(templateId) {
-    showAlert('编辑功能开发中...', 'info');
-}
+        // 用测试数据渲染预览
+        const testData = {
+            receipt_number: 'RCP-20260515-001',
+            payer_name: '测试付款人有限公司',
+            payer_tax_id: '91110000MA01ABCDEF',
+            payee_name: '天津骏途企业管理咨询有限公司',
+            payee_tax_id: '9112010175484682X1',
+            amount: 23399.77,
+            total_amount: 23399.77,
+            payment_date: '2026-05-15',
+            purpose: '社保：15500、公积金：5200、工资：2699.77',
+            notes: '测试备注',
+            issuer: '张军',
+            currency: 'CNY',
+            tax_rate: 0,
+            tax_amount: 0,
+            created_at: new Date().toISOString()
+        };
 
-// 设置默认模板
-async function setDefaultTemplate(templateId) {
-    showAlert('设置默认功能开发中...', 'info');
-}
+        const resp = await fetch('/api/receipts/preview-html', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(testData)
+        });
 
-// 删除模板
-async function deleteTemplate(templateId) {
-    if (!confirm('确定要删除这个模板吗？')) {
-        return;
+        if (resp.ok) {
+            const html = await resp.text();
+            const iframe = document.getElementById('previewFrame');
+            iframe.srcdoc = html;
+            $('#previewModal').modal('show');
+        }
+    } catch (e) {
+        showAlert('预览失败', 'danger');
     }
-    showAlert('删除功能开发中...', 'info');
+}
+
+// ========== 编辑模板 ==========
+async function editTemplate(templateId) {
+    try {
+        const data = await apiRequest('/api/templates');
+        const template = data.templates.find(t => t.id === templateId);
+        if (!template) return;
+
+        $('#modalTitle').text('编辑模板');
+        $('#template_id').val(template.id);
+        $('#template_name').val(template.name);
+        $('#template_description').val(template.description || '');
+        $('#template_html').val(template.template_html);
+        $('#template_is_default').prop('checked', template.is_default);
+        $('#templateModal').modal('show');
+    } catch (e) {
+        showAlert('加载模板失败', 'danger');
+    }
+}
+
+// ========== 设置默认模板 ==========
+async function setDefaultTemplate(templateId) {
+    if (!confirm('确定要将此模板设为默认吗？')) return;
+
+    try {
+        showLoading();
+        await fetch(`/api/templates/${templateId}`, {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ is_default: 1 })
+        });
+        hideLoading();
+        showAlert('已设为默认模板', 'success');
+        loadTemplates();
+    } catch (e) {
+        hideLoading();
+        showAlert('设置失败', 'danger');
+    }
+}
+
+// ========== 删除模板 ==========
+async function deleteTemplate(templateId, name) {
+    if (!confirm(`确定要删除模板「${name}」吗？此操作不可恢复。`)) return;
+
+    try {
+        showLoading();
+        await fetch(`/api/templates/${templateId}`, {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        hideLoading();
+        showAlert('模板已删除', 'success');
+        loadTemplates();
+    } catch (e) {
+        hideLoading();
+        showAlert('删除失败', 'danger');
+    }
+}
+
+// ========== 获取带Token的请求头 ==========
+function getAuthHeaders() {
+    const token = localStorage.getItem('admin_token') || '';
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+    };
 }
 </script>
 {% endblock %}
