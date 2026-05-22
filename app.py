@@ -454,15 +454,14 @@ def batch_import():
                     payment_date = payment_date.strftime('%Y-%m-%d')
 
                 payer_name = row_data.get('付款人名称', '') or row_data.get('名称', '')
-                payer_tax_id = row_data.get('付款人税号', '') or row_data.get('税号', '')
-                payee_name = row_data.get('收款人', '')
-                payee_tax_id = row_data.get('收款人税号', '')
+                payee_name = row_data.get('收款人名称', '') or row_data.get('收款人', '')
+                email = str(row_data.get('邮箱地址', '')) if row_data.get('邮箱地址') else ''
 
                 # 计算各项金额
                 items = []
                 total = 0
                 for key in ['代收代付社保', '代收代付公积金', '代收代付工资',
-                           '代收代付个税', '代收代付商险', '代收代付福利', '代收代付其他']:
+                           '代收代付个税', '代收代付商险', '代收代付福利', '代收代付残保金', '代收代付其他']:
                     val = row_data.get(key, 0)
                     if val:
                         try:
@@ -480,17 +479,16 @@ def batch_import():
                 receipt_data = {
                     'receipt_number': db.generate_receipt_number(),
                     'payer_name': payer_name,
-                    'payer_tax_id': str(payer_tax_id) if payer_tax_id else '',
                     'amount': total,
                     'currency': 'CNY',
                     'payment_date': str(payment_date) if payment_date else datetime.now().strftime('%Y-%m-%d'),
                     'purpose': '、'.join([i['name'] + '：' + str(i['amount']) for i in items]),
-                    'payee_name': str(payee_name) if payee_name else '天津俊途企业管理咨询有限公司',
-                    'payee_tax_id': str(payee_tax_id) if payee_tax_id else '',
+                    'payee_name': str(payee_name) if payee_name else '天津俊途人力资源服务有限公司',
                     'tax_rate': 0,
                     'tax_amount': 0,
                     'total_amount': total,
-                    'notes': str(row_data.get('备注', '')) if row_data.get('备注') else ''
+                    'notes': str(row_data.get('备注', '')) if row_data.get('备注') else '',
+                    'email': email
                 }
                 receipt_id = db.create_receipt(receipt_data)
                 results.append({'id': receipt_id, 'receipt_number': receipt_data['receipt_number']})
@@ -515,15 +513,15 @@ def download_template():
         ws.title = "批量导入模板"
 
         # 表头
-        headers = ['填制日期', '付款人名称', '付款人税号', '收款人', '收款人税号',
+        headers = ['填制日期', '付款人名称', '收款人名称',
                    '代收代付社保', '代收代付公积金', '代收代付工资', '代收代付个税',
-                   '代收代付商险', '代收代付福利', '代收代付其他', '合计', '备注']
+                   '代收代付商险', '代收代付福利', '代收代付残保金', '代收代付其他',
+                   '合计', '邮箱地址', '备注']
         ws.append(headers)
 
         # 示例数据
-        example = ['2026-05-13', '天津俊途企业管理咨询有限公司', '9112010175484682X1',
-                   '天津俊途企业管理咨询有限公司', '9112010175484682X1',
-                   '', '', '23399.77', '', '', '', '', '23399.77', 'C0247CL001171EZ\n2026.1']
+        example = ['2026-05-22', '示例公司', '天津俊途人力资源服务有限公司',
+                   '', '', '23399.77', '', '', '', '', '', '23399.77', 'example@email.com', 'C0247CL001171EZ\n2026.1']
         ws.append(example)
 
         output = BytesIO()
@@ -531,7 +529,7 @@ def download_template():
         output.seek(0)
 
         return send_file(output, as_attachment=True,
-                        download_name='批量导入模板.xlsx',
+                        download_name='批量导入模板修改版.xlsx',
                         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -631,6 +629,132 @@ def delete_template(template_id):
             return jsonify({'error': '不能删除默认模板'}), 400
         new_templates = [t for t in templates if t['id'] != template_id]
         db._write_json(db.TEMPLATES_FILE, new_templates)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+
+
+# ==================== 邮件发送API ====================
+
+@app.route('/api/receipts/<int:receipt_id>/send-email', methods=['POST'])
+def send_receipt_email(receipt_id):
+    """发送收据PDF到指定邮箱"""
+    try:
+        import smtplib
+        from email.mime.multipart import MIMEMultipart
+        from email.mime.text import MIMEText
+        from email.mime.application import MIMEApplication
+
+        data = request.get_json(force=True)
+        email_to = data.get('email', '').strip()
+        if not email_to or '@' not in email_to:
+            return jsonify({'error': '请输入有效的邮箱地址'}), 400
+
+        receipt = db.get_receipt(receipt_id)
+        if not receipt:
+            return jsonify({'error': '收据不存在'}), 404
+
+        # 生成PDF
+        template = db.get_default_template()
+        template_html = template['template_html'] if template else None
+        pdf_path = pdf_generator.generate_pdf(receipt, template_html)
+
+        # 读取邮件配置
+        admin_config = get_admin_config()
+        smtp_host = os.environ.get('SMTP_HOST', admin_config.get('smtp_host', ''))
+        smtp_port = int(os.environ.get('SMTP_PORT', admin_config.get('smtp_port', 587)))
+        smtp_user = os.environ.get('SMTP_USER', admin_config.get('smtp_user', ''))
+        smtp_pass = os.environ.get('SMTP_PASS', admin_config.get('smtp_pass', ''))
+        smtp_from = os.environ.get('SMTP_FROM', admin_config.get('smtp_from', smtp_user))
+
+        if not smtp_host or not smtp_user:
+            return jsonify({'error': '邮件服务未配置，请在系统管理中设置SMTP信息'}), 400
+
+        # 构建邮件
+        msg = MIMEMultipart()
+        msg['From'] = smtp_from
+        msg['To'] = email_to
+        msg['Subject'] = f'收据 - {receipt["receipt_number"]}'
+
+        rn = "\n"
+        body = "您好，" + rn + rn + f"附件为收据 {receipt['receipt_number']} 的PDF文件。" + rn + rn + f"付款人：{receipt['payer_name']}" + rn + f"金额：¥{receipt['total_amount']:.2f}" + rn + f"日期：{receipt['payment_date']}" + rn + rn + "此邮件由系统自动发送，请勿回复。"
+        msg.attach(MIMEText(body, 'plain', 'utf-8'))
+
+        with open(pdf_path, 'rb') as f:
+            pdf_attach = MIMEApplication(f.read(), _subtype='pdf')
+            pdf_attach.add_header('Content-Disposition', 'attachment',
+                                  filename=f'收据_{receipt["receipt_number"]}.pdf')
+            msg.attach(pdf_attach)
+
+        # 发送
+        server = smtplib.SMTP(smtp_host, smtp_port)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_from, [email_to], msg.as_string())
+        server.quit()
+
+        # 记录发送邮箱
+        db.update_receipt(receipt_id, {'email': email_to})
+
+        return jsonify({'success': True, 'message': f'收据已发送到 {email_to}'})
+    except Exception as e:
+        return jsonify({'error': f'发送失败: {str(e)}'}), 500
+
+
+# ==================== 收据作废API ====================
+
+@app.route('/api/receipts/<int:receipt_id>/void', methods=['PUT'])
+def void_receipt(receipt_id):
+    """作废收据"""
+    try:
+        receipt = db.get_receipt(receipt_id)
+        if not receipt:
+            return jsonify({'error': '收据不存在'}), 404
+        if receipt.get('status') == 'voided':
+            return jsonify({'error': '收据已作废'}), 400
+        success = db.update_receipt(receipt_id, {'status': 'voided'})
+        if success:
+            return jsonify({'success': True, 'message': '收据已作废'})
+        return jsonify({'error': '作废失败'}), 500
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# ==================== SMTP配置API ====================
+
+@app.route('/api/admin/smtp-config', methods=['GET'])
+@require_auth
+def get_smtp_config():
+    config = get_admin_config()
+    return jsonify({
+        'smtp_host': config.get('smtp_host', ''),
+        'smtp_port': config.get('smtp_port', 587),
+        'smtp_user': config.get('smtp_user', ''),
+        'smtp_from': config.get('smtp_from', ''),
+        'has_password': bool(config.get('smtp_pass', ''))
+    })
+
+
+@app.route('/api/admin/smtp-config', methods=['PUT'])
+@require_auth
+def update_smtp_config():
+    try:
+        data = request.get_json(force=True)
+        config = get_admin_config()
+        if 'smtp_host' in data:
+            config['smtp_host'] = data['smtp_host']
+        if 'smtp_port' in data:
+            config['smtp_port'] = int(data['smtp_port'])
+        if 'smtp_user' in data:
+            config['smtp_user'] = data['smtp_user']
+        if 'smtp_pass' in data and data['smtp_pass']:
+            config['smtp_pass'] = data['smtp_pass']
+        if 'smtp_from' in data:
+            config['smtp_from'] = data['smtp_from']
+        save_admin_config(config)
         return jsonify({'success': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500

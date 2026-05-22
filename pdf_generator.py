@@ -6,6 +6,7 @@ PDF生成模块
 from xhtml2pdf import pisa
 import os
 import sys
+import base64
 
 
 def num_to_chinese(num):
@@ -23,7 +24,6 @@ def num_to_chinese(num):
 
     result = ''
 
-    # 处理整数部分
     if integer_part > 0:
         str_int = str(integer_part)
         length = len(str_int)
@@ -51,7 +51,6 @@ def num_to_chinese(num):
     else:
         result = '零元'
 
-    # 处理小数部分
     if decimal_part > 0:
         jiao = decimal_part // 10
         fen = decimal_part % 10
@@ -70,6 +69,15 @@ def get_base_path():
         return os.path.dirname(sys.executable)
     else:
         return os.path.abspath(os.path.dirname(__file__))
+
+
+def get_seal_base64():
+    """获取财务章图片的base64编码"""
+    seal_path = os.path.join(get_base_path(), 'static', 'seal.png')
+    if os.path.exists(seal_path):
+        with open(seal_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    return ''
 
 
 def generate_pdf(receipt: dict, template_html: str = None) -> str:
@@ -128,18 +136,18 @@ def render_template(template: str, data: dict) -> str:
     if not items:
         items = [{'name': '', 'amount': ''}]
 
-    # 生成项目HTML - 6列表格: colspan=3 for 收款内容, colspan=3 for 金额
+    # 生成项目HTML - 4列表格: colspan=2 for 收款内容, colspan=2 for 金额
     items_html = ''
     for item in items:
         amt_display = item["amount"] if item["amount"] else ''
-        items_html += '<tr><td colspan="3" style="text-align:left; padding:6px 8px; border:1px solid #333;">' + item["name"] + '</td><td colspan="3" style="text-align:right; padding:6px 8px; border:1px solid #333;">' + amt_display + '</td></tr>\n'
+        items_html += '<tr><td colspan="2" style="text-align:left; padding:5px 8px; border:1px solid #333;">' + item["name"] + '</td><td colspan="2" style="text-align:right; padding:5px 8px; border:1px solid #333;">' + amt_display + '</td></tr>\n'
 
-    # 填充空行（至少显示5行）
-    for _ in range(max(0, 5 - len(items))):
-        items_html += '<tr><td colspan="3" style="padding:6px 8px; border:1px solid #333;">&nbsp;</td><td colspan="3" style="padding:6px 8px; border:1px solid #333;">&nbsp;</td></tr>\n'
+    # 填充空行（至少显示4行）
+    for _ in range(max(0, 4 - len(items))):
+        items_html += '<tr><td colspan="2" style="padding:5px 8px; border:1px solid #333;">&nbsp;</td><td colspan="2" style="padding:5px 8px; border:1px solid #333;">&nbsp;</td></tr>\n'
 
     data['items_html'] = items_html
-    data['issuer'] = data.get('issuer', '')
+    data['issuer'] = data.get('issuer', '陈婷')
 
     # 金额格式化
     total_amount = data.get('total_amount', 0)
@@ -147,6 +155,13 @@ def render_template(template: str, data: dict) -> str:
         data['total_amount_display'] = '{:,.2f}'.format(total_amount)
     else:
         data['total_amount_display'] = str(total_amount)
+
+    # 财务章图片
+    seal_b64 = get_seal_base64()
+    if seal_b64:
+        data['seal_img'] = '<img src="data:image/png;base64,' + seal_b64 + '" style="width:80px; height:80px; opacity:0.7;" />'
+    else:
+        data['seal_img'] = ''
 
     # 替换模板变量
     html = template
@@ -164,13 +179,13 @@ def get_default_template_html() -> str:
 <meta charset="UTF-8">
 <style>
 @page {
-    size: A4;
-    margin: 2cm 2.5cm;
+    size: 24cm 14cm landscape;
+    margin: 1cm 1.5cm;
 }
 body {
     font-family: Arial, Helvetica, sans-serif;
-    font-size: 13px;
-    line-height: 1.6;
+    font-size: 12px;
+    line-height: 1.5;
     color: #000;
 }
 .receipt-wrap {
@@ -178,23 +193,23 @@ body {
 }
 h2 {
     text-align: center;
-    font-size: 20px;
+    font-size: 18px;
     margin: 0 0 2px 0;
-    letter-spacing: 3px;
+    letter-spacing: 2px;
 }
 h3 {
     text-align: center;
-    font-size: 17px;
-    margin: 0 0 10px 0;
-    letter-spacing: 8px;
+    font-size: 15px;
+    margin: 0 0 8px 0;
+    letter-spacing: 6px;
 }
 .info-row {
     width: 100%;
-    margin-bottom: 6px;
-    font-size: 12px;
+    margin-bottom: 4px;
+    font-size: 11px;
 }
 .info-row td {
-    padding: 2px 0;
+    padding: 1px 0;
 }
 .mtbl {
     width: 100%;
@@ -203,8 +218,8 @@ h3 {
 }
 .mtbl td {
     border: 1px solid #333;
-    padding: 5px 8px;
-    font-size: 12px;
+    padding: 4px 6px;
+    font-size: 11px;
     vertical-align: middle;
 }
 .mtbl .lb {
@@ -214,30 +229,29 @@ h3 {
 }
 .sign-row {
     width: 100%;
-    margin-top: 25px;
-    font-size: 12px;
+    margin-top: 15px;
+    font-size: 11px;
 }
 .sign-row td {
-    padding: 5px 0;
+    padding: 3px 0;
     vertical-align: bottom;
 }
-.sign-line {
+.seal-area {
     display: inline-block;
-    border-bottom: 1px solid #333;
-    width: 150px;
-    height: 14px;
+    margin-left: 5px;
+    vertical-align: bottom;
 }
 .note {
     text-align: center;
-    font-size: 10px;
+    font-size: 9px;
     color: #888;
-    margin-top: 18px;
+    margin-top: 12px;
 }
 </style>
 </head>
 <body>
 <div class="receipt-wrap">
-    <h2>天津俊途企业管理咨询有限公司</h2>
+    <h2>天津人力资源服务有限公司</h2>
     <h3>电 子 收 据</h3>
 
     <table class="info-row" cellpadding="0" cellspacing="0">
@@ -249,46 +263,37 @@ h3 {
 
     <table class="mtbl" cellpadding="0" cellspacing="0">
         <tr>
-            <td class="lb" rowspan="2" style="width:60px;">付款人</td>
-            <td class="lb" style="width:120px;">名称</td>
-            <td style="width:170px;">{{ payer_name }}</td>
-            <td class="lb" rowspan="2" style="width:60px;">收款人</td>
-            <td class="lb" style="width:120px;">名称</td>
-            <td>{{ payee_name }}</td>
+            <td class="lb" style="width:60px;">付款人</td>
+            <td>{{ payer_name }}</td>
+            <td class="lb" style="width:60px;">收款人</td>
+            <td>天津俊途人力资源服务有限公司</td>
         </tr>
         <tr>
-            <td class="lb">统一社会信用代码</td>
-            <td>{{ payer_tax_id }}</td>
-            <td class="lb">统一社会信用代码</td>
-            <td>{{ payee_tax_id }}</td>
-        </tr>
-        <tr>
-            <td class="lb" colspan="3">收款内容</td>
-            <td class="lb" colspan="3">金额</td>
+            <td class="lb" colspan="2">收款内容</td>
+            <td class="lb" colspan="2">金额</td>
         </tr>
         {{ items_html }}
         <tr>
-            <td class="lb" colspan="2">合计金额（大写）</td>
-            <td colspan="2">{{ total_amount_cn }}</td>
+            <td class="lb">合计金额（大写）</td>
+            <td>{{ total_amount_cn }}</td>
             <td class="lb">合计金额（小写）</td>
-            <td style="text-align:right; font-weight:bold; font-size:14px;">{{ total_amount_display }}</td>
+            <td style="text-align:right; font-weight:bold; font-size:13px;">{{ total_amount_display }}</td>
         </tr>
         <tr>
-            <td class="lb" colspan="2">备注</td>
-            <td colspan="4">{{ notes }}</td>
+            <td class="lb">备注</td>
+            <td colspan="3">{{ notes }}</td>
         </tr>
     </table>
 
     <table class="sign-row" cellpadding="0" cellspacing="0">
         <tr>
-            <td style="width:50%;">开具人：<span class="sign-line">{{ issuer }}</span></td>
-            <td style="width:50%; text-align:right;">收款单位（盖章）：<span class="sign-line">&nbsp;</span></td>
+            <td style="width:50%;">开具人：陈婷</td>
+            <td style="width:50%; text-align:right;">收款单位（盖章）：<span class="seal-area">{{ seal_img }}</span></td>
         </tr>
     </table>
 
     <div class="note">
         <p>本收据仅作对账使用，款项未实际到账前不视为已收款。</p>
-        <p>本收据由【快收据】平台开具，【腾讯云CA】认证，您可微信扫码或访问https://ksj.yimion.com 查验。</p>
     </div>
 </div>
 </body>

@@ -119,6 +119,57 @@
             </div>
         </div>
     </div>
+
+    <!-- SMTP邮件配置 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-envelope"></i> 邮件发送配置（SMTP）
+                </div>
+                <div class="card-body">
+                    <form id="smtpForm">
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">SMTP服务器</label>
+                                <input type="text" class="form-control" id="smtp_host" placeholder="如 smtp.qq.com">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">端口</label>
+                                <input type="number" class="form-control" id="smtp_port" value="587">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">加密</label>
+                                <select class="form-select" id="smtp_encryption" disabled>
+                                    <option value="tls" selected>STARTTLS</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">发件邮箱（登录账号）</label>
+                                <input type="text" class="form-control" id="smtp_user" placeholder="如 your@qq.com">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">授权码/密码</label>
+                                <input type="password" class="form-control" id="smtp_pass" placeholder="留空则不修改">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label">发件人名称</label>
+                                <input type="text" class="form-control" id="smtp_from" placeholder="如 天津人力资源服务有限公司">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> 保存邮件配置
+                        </button>
+                    </form>
+                    <small class="text-muted d-block mt-2">配置后可通过仪表盘的"发送"按钮将收据PDF发送到指定邮箱</small>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -142,6 +193,10 @@ $(document).ready(function() {
         e.preventDefault();
         changePassword();
     });
+    $('#smtpForm').submit(function(e) {
+        e.preventDefault();
+        saveSmtpConfig();
+    });
 });
 
 function getAuthHeaders() {
@@ -160,8 +215,9 @@ async function checkAuth() {
         if (data.logged_in) {
             $('#loginSection').hide();
             $('#adminSection').show();
-            $('#currentUsername').text(data.username);
-            loadNumberConfig();
+        $('#currentUsername').text(data.username);
+        loadNumberConfig();
+        loadSmtpConfig();
         } else {
             $('#loginSection').show();
             $('#adminSection').hide();
@@ -331,6 +387,61 @@ async function changePassword() {
         hideLoading();
         showAlert('修改失败', 'danger');
     }
+}
+
+async function loadSmtpConfig() {
+    try {
+        const resp = await fetch('/api/admin/smtp-config', { headers: getAuthHeaders() });
+        if (resp.status === 401) { checkAuth(); return; }
+        const data = await resp.json();
+        $('#smtp_host').val(data.smtp_host || '');
+        $('#smtp_port').val(data.smtp_port || 587);
+        $('#smtp_user').val(data.smtp_user || '');
+        $('#smtp_from').val(data.smtp_from || '');
+        if (data.has_password) {
+            $('#smtp_pass').attr('placeholder', '已设置，留空则不修改');
+        }
+    } catch (e) {}
+}
+
+async function saveSmtpConfig() {
+    const config = {
+        smtp_host: $('#smtp_host').val().trim(),
+        smtp_port: parseInt($('#smtp_port').val()) || 587,
+        smtp_user: $('#smtp_user').val().trim(),
+        smtp_from: $('#smtp_from').val().trim()
+    };
+    const pass = $('#smtp_pass').val();
+    if (pass) config.smtp_pass = pass;
+
+    try {
+        showLoading();
+        const resp = await fetch('/api/admin/smtp-config', {
+            method: 'PUT',
+            headers: getAuthHeaders(),
+            body: JSON.stringify(config)
+        });
+        const data = await resp.json();
+        hideLoading();
+        if (data.success) {
+            showAlert('邮件配置已保存', 'success');
+            $('#smtp_pass').val('');
+            loadSmtpConfig();
+        } else {
+            showAlert(data.error || '保存失败', 'danger');
+        }
+    } catch (e) {
+        hideLoading();
+        showAlert('保存失败', 'danger');
+    }
+}
+
+function getAuthHeaders() {
+    const token = localStorage.getItem('admin_token') || '';
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + token
+    };
 }
 </script>
 {% endblock %}

@@ -153,7 +153,8 @@ class Database:
             if r["id"] == receipt_id:
                 for k in ["payer_name", "payer_tax_id", "amount", "currency",
                          "payment_date", "purpose", "payee_name", "payee_tax_id",
-                         "tax_rate", "tax_amount", "total_amount", "notes", "template_type"]:
+                         "tax_rate", "tax_amount", "total_amount", "notes", "template_type",
+                         "status", "email", "receipt_number"]:
                     if k in data:
                         r[k] = data[k]
                 r["updated_at"] = datetime.now().isoformat()

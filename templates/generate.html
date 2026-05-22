@@ -29,27 +29,10 @@
 
                     <h6 class="mb-3 text-primary">付款人信息</h6>
                     <div class="row mb-3">
-                        <div class="col-md-8">
+                        <div class="col-md-12">
                             <label class="form-label">付款人名称 <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="payer_name" required autocomplete="off">
                             <div id="payerSuggestions" class="list-group position-absolute w-100" style="z-index:1000; display:none;"></div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">付款人税号</label>
-                            <input type="text" class="form-control" id="payer_tax_id">
-                        </div>
-                    </div>
-
-                    <h6 class="mb-3 text-primary">收款人信息</h6>
-                    <div class="row mb-3">
-                        <div class="col-md-8">
-                            <label class="form-label">收款人名称 <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="payee_name" required autocomplete="off">
-                            <div id="payeeSuggestions" class="list-group position-absolute w-100" style="z-index:1000; display:none;"></div>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label">收款人税号</label>
-                            <input type="text" class="form-control" id="payee_tax_id">
                         </div>
                     </div>
 
@@ -61,31 +44,12 @@
                         <button type="button" class="btn btn-sm btn-outline-success" id="addItemBtn">
                             <i class="fas fa-plus"></i> 添加项目
                         </button>
-                        <small class="text-muted ms-2">至少填写一个项目</small>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label class="form-label">税额</label>
-                            <input type="text" class="form-control" id="tax_amount" readonly>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">总金额</label>
-                            <input type="text" class="form-control" id="total_amount" readonly style="font-weight: bold; color: #d32f2f;">
-                        </div>
                     </div>
 
                     <div class="row mb-3">
                         <div class="col-md-12">
                             <label class="form-label">备注</label>
                             <textarea class="form-control" id="notes" rows="2"></textarea>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-md-12">
-                            <label class="form-label">开具人</label>
-                            <input type="text" class="form-control" id="issuer" placeholder="留空则不显示">
                         </div>
                     </div>
 
@@ -131,12 +95,20 @@
 let previewTimer = null;
 let itemIndex = 0;
 
+const ITEM_OPTIONS = [
+    { value: '代收代付社保', label: '代收代付社保' },
+    { value: '代收代付公积金', label: '代收代付公积金' },
+    { value: '代收代付工资', label: '代收代付工资' },
+    { value: '代收代付个税', label: '代收代付个税' },
+    { value: '代收代付商险', label: '代收代付商险' },
+    { value: '代收代付福利', label: '代收代付福利' },
+    { value: '代收代付残保金', label: '代收代付残保金' },
+    { value: '代收代付其他', label: '代收代付其他' }
+];
+
 $(document).ready(function() {
     $('#payment_date').val(new Date().toISOString().split('T')[0]);
-
-    // 初始化一个空项目行
     addItemRow();
-
     $('#generateNumberBtn').click(generateReceiptNumber);
     $('#addItemBtn').click(function() { addItemRow(); });
     $('#receiptForm').submit(function(e) { e.preventDefault(); saveReceipt(false); });
@@ -147,56 +119,44 @@ $(document).ready(function() {
             itemIndex = 0;
             addItemRow();
             $('#payment_date').val(new Date().toISOString().split('T')[0]);
-            $('#tax_amount').val('');
-            $('#total_amount').val('');
             refreshPreview();
         }, 50);
     });
     $('#refreshPreviewBtn').click(refreshPreview);
 
-    // 自动预览
     $(document).on('input change', '#receiptForm input, #receiptForm textarea, #receiptForm select', function() {
         clearTimeout(previewTimer);
         previewTimer = setTimeout(refreshPreview, 800);
     });
 
-    // 付款人自动搜索
-    $('#payer_name').on('input', function() {
-        searchPayers($(this).val());
-    });
-
-    // 收款人自动搜索
-    $('#payee_name').on('input', function() {
-        searchPayees($(this).val());
-    });
-
-    // 点击外部关闭建议列表
+    $('#payer_name').on('input', function() { searchPayers($(this).val()); });
     $(document).click(function(e) {
         if (!$(e.target).closest('#payer_name, #payerSuggestions').length) {
             $('#payerSuggestions').hide();
-        }
-        if (!$(e.target).closest('#payee_name, #payeeSuggestions').length) {
-            $('#payeeSuggestions').hide();
         }
     });
 
     setTimeout(refreshPreview, 500);
 });
 
-// ========== 动态项目行 ==========
-function addItemRow(name, amount) {
-    name = name || '';
+function addItemRow(selectedName, amount) {
+    selectedName = selectedName || '';
     amount = amount || '';
     const idx = itemIndex++;
+    let optionsHtml = '<option value="">请选择项目</option>';
+    ITEM_OPTIONS.forEach(opt => {
+        const sel = opt.value === selectedName ? ' selected' : '';
+        optionsHtml += '<option value="' + opt.value + '"' + sel + '>' + opt.label + '</option>';
+    });
     const html = `
         <div class="row mb-2 item-row" data-idx="${idx}">
             <div class="col-md-6">
-                <input type="text" class="form-control item-name" placeholder="项目名称（如：社保）" value="${name}">
+                <select class="form-select item-name" required>${optionsHtml}</select>
             </div>
             <div class="col-md-4">
                 <input type="number" class="form-control item-amount" placeholder="金额" step="0.01" min="0" value="${amount}">
             </div>
-            <div class="col-md-2">
+            <div class="col-md-2 d-flex align-items-center">
                 <button type="button" class="btn btn-sm btn-outline-danger remove-item-btn" title="删除此行">
                     <i class="fas fa-times"></i>
                 </button>
@@ -207,8 +167,7 @@ function addItemRow(name, amount) {
 }
 
 $(document).on('click', '.remove-item-btn', function() {
-    const rows = $('#itemsContainer .item-row');
-    if (rows.length <= 1) {
+    if ($('#itemsContainer .item-row').length <= 1) {
         alert('至少保留一个项目');
         return;
     }
@@ -216,11 +175,10 @@ $(document).on('click', '.remove-item-btn', function() {
     refreshPreview();
 });
 
-// ========== 收集项目数据 ==========
 function getItems() {
     const items = [];
     $('#itemsContainer .item-row').each(function() {
-        const name = $(this).find('.item-name').val().trim();
+        const name = $(this).find('.item-name').val();
         const amount = $(this).find('.item-amount').val();
         if (name) {
             items.push({ name: name, amount: amount ? parseFloat(amount) : 0 });
@@ -230,76 +188,33 @@ function getItems() {
 }
 
 function getTotalAmount() {
-    const items = getItems();
     let total = 0;
-    items.forEach(function(item) {
-        total += item.amount;
-    });
+    getItems().forEach(function(item) { total += item.amount; });
     return total;
 }
 
-// ========== 搜索功能 ==========
 async function searchPayers(keyword) {
-    if (keyword.length < 1) {
-        $('#payerSuggestions').hide();
-        return;
-    }
+    if (keyword.length < 1) { $('#payerSuggestions').hide(); return; }
     try {
         const data = await apiRequest('/api/payers?keyword=' + encodeURIComponent(keyword));
         if (data.payers && data.payers.length > 0) {
             let html = '';
             data.payers.forEach(p => {
-                html += `<a href="#" class="list-group-item list-group-item-action" onclick="selectPayer('${p.name}', '${p.tax_id || ''}'); return false;">
-                    <strong>${p.name}</strong>${p.tax_id ? '<br><small class="text-muted">税号: ' + p.tax_id + '</small>' : ''}
+                html += `<a href="#" class="list-group-item list-group-item-action" onclick="selectPayer('${p.name}'); return false;">
+                    <strong>${p.name}</strong>
                 </a>`;
             });
             $('#payerSuggestions').html(html).show();
-        } else {
-            $('#payerSuggestions').hide();
-        }
-    } catch (e) {
-        $('#payerSuggestions').hide();
-    }
+        } else { $('#payerSuggestions').hide(); }
+    } catch (e) { $('#payerSuggestions').hide(); }
 }
 
-function selectPayer(name, taxId) {
+function selectPayer(name) {
     $('#payer_name').val(name);
-    $('#payer_tax_id').val(taxId);
     $('#payerSuggestions').hide();
     refreshPreview();
 }
 
-async function searchPayees(keyword) {
-    if (keyword.length < 1) {
-        $('#payeeSuggestions').hide();
-        return;
-    }
-    try {
-        const data = await apiRequest('/api/payees?keyword=' + encodeURIComponent(keyword));
-        if (data.payees && data.payees.length > 0) {
-            let html = '';
-            data.payees.forEach(p => {
-                html += `<a href="#" class="list-group-item list-group-item-action" onclick="selectPayee('${p.name}', '${p.tax_id || ''}'); return false;">
-                    <strong>${p.name}</strong>${p.tax_id ? '<br><small class="text-muted">税号: ' + p.tax_id + '</small>' : ''}
-                </a>`;
-            });
-            $('#payeeSuggestions').html(html).show();
-        } else {
-            $('#payeeSuggestions').hide();
-        }
-    } catch (e) {
-        $('#payeeSuggestions').hide();
-    }
-}
-
-function selectPayee(name, taxId) {
-    $('#payee_name').val(name);
-    $('#payee_tax_id').val(taxId);
-    $('#payeeSuggestions').hide();
-    refreshPreview();
-}
-
-// ========== 编号和金额 ==========
 async function generateReceiptNumber() {
     try {
         const data = await apiRequest('/api/receipts/generate-number');
@@ -308,41 +223,24 @@ async function generateReceiptNumber() {
     } catch (error) {}
 }
 
-function calculateTax() {
-    const amount = getTotalAmount();
-    const taxRate = parseFloat($('#receiptForm select[name="tax_rate"]').length ? $('#tax_rate').val() : 0) || 0;
-    // 税率输入框不在原位置，用隐藏字段或去掉税率功能
-    const taxAmount = 0; // 简化为无税率
-    const totalAmount = amount + taxAmount;
-    $('#tax_amount').val('');
-    $('#total_amount').val('¥' + totalAmount.toFixed(2));
-}
-
-// ========== 预览 ==========
 async function refreshPreview() {
     const items = getItems();
     const total = getTotalAmount();
-
-    // 构造 purpose 字符串：名称：金额
-    const purposeStr = items.map(function(item) {
-        return item.name + '：' + (item.amount || '');
-    }).join('、');
+    const purposeStr = items.map(i => i.name + '：' + i.amount).join('、');
 
     const formData = {
         receipt_number: $('#receipt_number').val() || '(自动生成)',
         payer_name: $('#payer_name').val() || '(未填写)',
-        payer_tax_id: $('#payer_tax_id').val() || '',
         amount: total,
+        total_amount: total,
         currency: 'CNY',
         payment_date: $('#payment_date').val() || new Date().toISOString().split('T')[0],
         purpose: purposeStr,
-        payee_name: $('#payee_name').val() || '(未填写)',
-        payee_tax_id: $('#payee_tax_id').val() || '',
+        payee_name: '天津俊途人力资源服务有限公司',
         tax_rate: 0,
         tax_amount: 0,
-        total_amount: total,
         notes: $('#notes').val() || '',
-        issuer: $('#issuer').val() || ''
+        issuer: '陈婷'
     };
 
     try {
@@ -351,46 +249,34 @@ async function refreshPreview() {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(formData)
         });
-
         if (resp.ok) {
             const html = await resp.text();
-            $('#receiptPreview').html(`
-                <div style="border:1px solid #ddd; border-radius:8px; padding:10px; background:#fff;">
-                    ${html}
-                </div>
-            `);
+            $('#receiptPreview').html('<div style="border:1px solid #ddd; border-radius:8px; padding:10px; background:#fff;">' + html + '</div>');
         }
     } catch (e) {}
 }
 
-// ========== 保存 ==========
 async function saveReceipt(generatePdf) {
     const items = getItems();
-    if (items.length === 0) {
-        showAlert('请至少填写一个收款项目', 'danger');
-        return;
-    }
+    if (items.length === 0) { showAlert('请至少填写一个收款项目', 'danger'); return; }
+    if (!$('#payer_name').val()) { showAlert('请填写付款人名称', 'danger'); return; }
 
     const total = getTotalAmount();
-    const purposeStr = items.map(function(item) {
-        return item.name + '：' + item.amount;
-    }).join('、');
+    const purposeStr = items.map(i => i.name + '：' + i.amount).join('、');
 
     const formData = {
         receipt_number: $('#receipt_number').val(),
         payer_name: $('#payer_name').val(),
-        payer_tax_id: $('#payer_tax_id').val(),
         amount: total,
+        total_amount: total,
         currency: 'CNY',
         payment_date: $('#payment_date').val(),
         purpose: purposeStr,
-        payee_name: $('#payee_name').val(),
-        payee_tax_id: $('#payee_tax_id').val(),
+        payee_name: '天津俊途人力资源服务有限公司',
         tax_rate: 0,
         tax_amount: 0,
-        total_amount: total,
         notes: $('#notes').val(),
-        issuer: $('#issuer').val()
+        issuer: '陈婷'
     };
 
     try {
@@ -409,13 +295,9 @@ async function saveReceipt(generatePdf) {
             itemIndex = 0;
             addItemRow();
             $('#payment_date').val(new Date().toISOString().split('T')[0]);
-            $('#tax_amount').val('');
-            $('#total_amount').val('');
             refreshPreview();
         }
-    } catch (error) {
-        hideLoading();
-    }
+    } catch (error) { hideLoading(); }
 }
 </script>
 {% endblock %}

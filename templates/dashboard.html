@@ -7,14 +7,13 @@
 {% block content %}
 <!-- 统计卡片 -->
 <div class="row mb-4">
-    <div class="col-xl-3 col-md-6 mb-4">
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card stat-card h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">
-                            今日收具</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="todayCount">0</div>
+                        <div class="text-xs font-weight-bold text-primary text-uppercase mb-1">今日收据</div>
+                        <div class="h5 mb-0 font-weight-bold" id="todayCount">0</div>
                         <div class="text-xs text-muted mt-2" id="todayAmount">¥0.00</div>
                     </div>
                     <div class="col-auto">
@@ -25,14 +24,13 @@
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card stat-card success h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">
-                            本月收具</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="monthCount">0</div>
+                        <div class="text-xs font-weight-bold text-success text-uppercase mb-1">本月收据</div>
+                        <div class="h5 mb-0 font-weight-bold" id="monthCount">0</div>
                         <div class="text-xs text-muted mt-2" id="monthAmount">¥0.00</div>
                     </div>
                     <div class="col-auto">
@@ -43,36 +41,17 @@
         </div>
     </div>
 
-    <div class="col-xl-3 col-md-6 mb-4">
+    <div class="col-xl-4 col-md-6 mb-4">
         <div class="card stat-card info h-100">
             <div class="card-body">
                 <div class="row no-gutters align-items-center">
                     <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">
-                            全部收具</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800" id="totalCount">0</div>
+                        <div class="text-xs font-weight-bold text-info text-uppercase mb-1">全部收据</div>
+                        <div class="h5 mb-0 font-weight-bold" id="totalCount">0</div>
                         <div class="text-xs text-muted mt-2" id="totalAmount">¥0.00</div>
                     </div>
                     <div class="col-auto">
                         <i class="fas fa-receipt fa-2x text-gray-300"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="col-xl-3 col-md-6 mb-4">
-        <div class="card stat-card warning h-100">
-            <div class="card-body">
-                <div class="row no-gutters align-items-center">
-                    <div class="col mr-2">
-                        <div class="text-xs font-weight-bold text-warning text-uppercase mb-1">
-                            汇率参考</div>
-                        <div class="h5 mb-0 font-weight-bold text-gray-800">¥7.26</div>
-                        <div class="text-xs text-muted mt-2">1 USD = 7.26 CNY</div>
-                    </div>
-                    <div class="col-auto">
-                        <i class="fas fa-dollar-sign fa-2x text-gray-300"></i>
                     </div>
                 </div>
             </div>
@@ -84,21 +63,16 @@
 <div class="row mb-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
-                快速操作
-            </div>
+            <div class="card-header">快速操作</div>
             <div class="card-body">
-                <a href="/generate" class="btn btn-primary btn-lg mr-3">
+                <a href="/generate" class="btn btn-primary btn-lg me-3">
                     <i class="fas fa-plus"></i> 开具新收据
                 </a>
-                <a href="/receipts" class="btn btn-success btn-lg mr-3">
-                    <i class="fas fa-list"></i> 查看所有收据
+                <a href="/batch" class="btn btn-success btn-lg me-3">
+                    <i class="fas fa-file-excel"></i> 批量导入
                 </a>
-                <a href="/templates" class="btn btn-info btn-lg mr-3">
-                    <i class="fas fa-file-alt"></i> 管理模板
-                </a>
-                <a href="/statistics" class="btn btn-warning btn-lg">
-                    <i class="fas fa-chart-bar"></i> 数据统计
+                <a href="/receipts" class="btn btn-info btn-lg">
+                    <i class="fas fa-list"></i> 收据管理
                 </a>
             </div>
         </div>
@@ -119,19 +93,45 @@
                         <thead>
                             <tr>
                                 <th>收据编号</th>
-                                <th>付款方</th>
+                                <th>付款人</th>
                                 <th>金额</th>
                                 <th>日期</th>
+                                <th>状态</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody id="recentReceipts">
-                            <tr>
-                                <td colspan="5" class="text-center">加载中...</td>
-                            </tr>
+                            <tr><td colspan="6" class="text-center">加载中...</td></tr>
                         </tbody>
                     </table>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 发送邮件模态框 -->
+<div class="modal fade" id="sendEmailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">发送收据到邮箱</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="sendReceiptId">
+                <div class="mb-3">
+                    <label class="form-label">收件人邮箱</label>
+                    <input type="email" class="form-control" id="sendEmailInput" placeholder="请输入邮箱地址" required>
+                    <small class="text-muted" id="sendReceiptInfo"></small>
+                </div>
+                <div id="sendResult"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmSendBtn">
+                    <i class="fas fa-paper-plane"></i> 发送
+                </button>
             </div>
         </div>
     </div>
@@ -143,60 +143,113 @@
 $(document).ready(function() {
     loadStatistics();
     loadRecentReceipts();
+    $('#confirmSendBtn').click(confirmSendEmail);
 });
 
-// 加载统计数据
 async function loadStatistics() {
     try {
         const data = await apiRequest('/api/statistics/summary');
-        
         $('#todayCount').text(data.today.count);
         $('#todayAmount').text('¥' + data.today.amount.toFixed(2));
-        
         $('#monthCount').text(data.month.count);
         $('#monthAmount').text('¥' + data.month.amount.toFixed(2));
-        
         $('#totalCount').text(data.total.count);
         $('#totalAmount').text('¥' + data.total.amount.toFixed(2));
+    } catch (error) {}
+}
+
+async function loadRecentReceipts() {
+    try {
+        const data = await apiRequest('/api/receipts?limit=10');
+        if (data.receipts.length === 0) {
+            $('#recentReceipts').html('<tr><td colspan="6" class="text-center">暂无收据记录</td></tr>');
+            return;
+        }
+
+        let html = '';
+        data.receipts.forEach(receipt => {
+            const isVoided = receipt.status === 'voided';
+            const statusBadge = isVoided
+                ? '<span class="badge bg-secondary">已作废</span>'
+                : '<span class="badge bg-success">有效</span>';
+            const voidBtnDisabled = isVoided ? 'disabled' : '';
+
+            html += `<tr class="${isVoided ? 'table-secondary' : ''}">
+                <td><strong>${receipt.receipt_number}</strong></td>
+                <td>${receipt.payer_name}</td>
+                <td><strong class="text-primary">¥${receipt.total_amount.toFixed(2)}</strong></td>
+                <td>${receipt.payment_date}</td>
+                <td>${statusBadge}</td>
+                <td>
+                    <a href="/receipt/${receipt.id}" class="btn btn-sm btn-info" title="查看">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <button class="btn btn-sm btn-success" onclick="openSendEmail(${receipt.id}, '${receipt.receipt_number}', '${receipt.email || ''}')" title="发送" ${voidBtnDisabled}>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button class="btn btn-sm btn-warning" onclick="voidReceipt(${receipt.id}, '${receipt.receipt_number}')" title="作废" ${voidBtnDisabled}>
+                        <i class="fas fa-ban"></i>
+                    </button>
+                    <button class="btn btn-sm btn-primary" onclick="printReceipt(${receipt.id})" title="打印" ${voidBtnDisabled}>
+                        <i class="fas fa-print"></i>
+                    </button>
+                </td>
+            </tr>`;
+        });
+
+        $('#recentReceipts').html(html);
     } catch (error) {
-        console.error('加载统计数据失败:', error);
+        $('#recentReceipts').html('<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>');
     }
 }
 
-// 加载最近收据
-async function loadRecentReceipts() {
+function openSendEmail(receiptId, receiptNumber, existingEmail) {
+    $('#sendReceiptId').val(receiptId);
+    $('#sendEmailInput').val(existingEmail || '');
+    $('#sendReceiptInfo').text('收据编号: ' + receiptNumber);
+    $('#sendResult').html('');
+    $('#sendEmailModal').modal('show');
+}
+
+async function confirmSendEmail() {
+    const receiptId = $('#sendReceiptId').val();
+    const email = $('#sendEmailInput').val().trim();
+    if (!email || !email.includes('@')) {
+        $('#sendResult').html('<div class="alert alert-danger">请输入有效的邮箱地址</div>');
+        return;
+    }
+
     try {
-        const data = await apiRequest('/api/receipts?limit=5');
-        
-        if (data.receipts.length === 0) {
-            $('#recentReceipts').html('<tr><td colspan="5" class="text-center">暂无收据记录</td></tr>');
-            return;
-        }
-        
-        let html = '';
-        data.receipts.forEach(receipt => {
-            html += `
-                <tr>
-                    <td><strong>${receipt.receipt_number}</strong></td>
-                    <td>${receipt.payer_name}</td>
-                    <td><strong class="text-primary">¥${receipt.total_amount.toFixed(2)}</strong></td>
-                    <td>${receipt.payment_date}</td>
-                    <td>
-                        <a href="/receipt/${receipt.id}" class="btn btn-sm btn-info">
-                            <i class="fas fa-eye"></i>
-                        </a>
-                        <a href="/api/receipts/${receipt.id}/pdf" class="btn btn-sm btn-danger">
-                            <i class="fas fa-file-pdf"></i>
-                        </a>
-                    </td>
-                </tr>
-            `;
+        showLoading();
+        const data = await apiRequest(`/api/receipts/${receiptId}/send-email`, {
+            method: 'POST',
+            body: JSON.stringify({ email: email })
         });
-        
-        $('#recentReceipts').html(html);
+        hideLoading();
+        $('#sendResult').html('<div class="alert alert-success">发送成功！</div>');
+        setTimeout(() => { $('#sendEmailModal').modal('hide'); loadRecentReceipts(); }, 1500);
     } catch (error) {
-        console.error('加载最近收据失败:', error);
-        $('#recentReceipts').html('<tr><td colspan="5" class="text-center text-danger">加载失败</td></tr>');
+        hideLoading();
+        $('#sendResult').html(`<div class="alert alert-danger">${error.message}</div>`);
+    }
+}
+
+async function voidReceipt(receiptId, receiptNumber) {
+    if (!confirm(`确定要作废收据「${receiptNumber}」吗？作废后不可恢复。`)) return;
+    try {
+        await apiRequest(`/api/receipts/${receiptId}/void`, { method: 'PUT' });
+        showAlert('收据已作废', 'success');
+        loadRecentReceipts();
+    } catch (error) {}
+}
+
+function printReceipt(receiptId) {
+    const printUrl = `/api/receipts/${receiptId}/pdf?inline=1`;
+    const printWindow = window.open(printUrl, '_blank');
+    if (printWindow) {
+        printWindow.onload = function() {
+            setTimeout(function() { printWindow.print(); }, 1000);
+        };
     }
 }
 </script>
