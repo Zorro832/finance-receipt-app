@@ -761,6 +761,45 @@ def update_smtp_config():
 
 
 
+
+
+@app.route('/api/admin/test-email', methods=['POST'])
+@require_auth
+def test_send_email():
+    """测试邮件发送"""
+    try:
+        import smtplib
+        from email.mime.text import MIMEText
+
+        data = request.get_json(force=True)
+        email_to = data.get('email', '').strip()
+        if not email_to or '@' not in email_to:
+            return jsonify({'error': '请输入有效邮箱'}), 400
+
+        admin_config = get_admin_config()
+        smtp_host = admin_config.get('smtp_host', '')
+        smtp_user = admin_config.get('smtp_user', '')
+        smtp_pass = admin_config.get('smtp_pass', '')
+
+        if not smtp_host or not smtp_user or not smtp_pass:
+            return jsonify({'error': '请先保存完整的邮件配置'}), 400
+
+        msg = MIMEText('这是一封测试邮件，收到说明邮件配置正确。', 'plain', 'utf-8')
+        msg['From'] = smtp_user
+        msg['To'] = email_to
+        msg['Subject'] = '收据系统 - 邮件测试'
+
+        server = smtplib.SMTP(smtp_host, 587)
+        server.starttls()
+        server.login(smtp_user, smtp_pass)
+        server.sendmail(smtp_user, [email_to], msg.as_string())
+        server.quit()
+
+        return jsonify({'success': True, 'message': '测试邮件已发送'})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     os.makedirs('receipts_pdf', exist_ok=True)
     os.makedirs('data', exist_ok=True)

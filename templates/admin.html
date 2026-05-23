@@ -125,47 +125,45 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <i class="fas fa-envelope"></i> 邮件发送配置（SMTP）
+                    <i class="fas fa-envelope"></i> 邮件发送配置
                 </div>
                 <div class="card-body">
                     <form id="smtpForm">
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">SMTP服务器</label>
-                                <input type="text" class="form-control" id="smtp_host" placeholder="如 smtp.qq.com">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">端口</label>
-                                <input type="number" class="form-control" id="smtp_port" value="587">
-                            </div>
-                            <div class="col-md-3">
-                                <label class="form-label">加密</label>
-                                <select class="form-select" id="smtp_encryption" disabled>
-                                    <option value="tls" selected>STARTTLS</option>
+                                <label class="form-label">邮箱类型</label>
+                                <select class="form-select" id="smtp_provider">
+                                    <option value="qq">QQ邮箱</option>
+                                    <option value="163">163邮箱</option>
+                                    <option value="126">126邮箱</option>
+                                    <option value="aliyun">阿里企业邮箱</option>
+                                    <option value="custom">其他（手动填写）</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">发件邮箱（登录账号）</label>
-                                <input type="text" class="form-control" id="smtp_user" placeholder="如 your@qq.com">
-                            </div>
-                            <div class="col-md-6">
-                                <label class="form-label">授权码/密码</label>
-                                <input type="password" class="form-control" id="smtp_pass" placeholder="留空则不修改">
+                                <label class="form-label">发件邮箱 <span class="text-danger">*</span></label>
+                                <input type="email" class="form-control" id="smtp_user" placeholder="your@qq.com" required>
                             </div>
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">发件人名称</label>
-                                <input type="text" class="form-control" id="smtp_from" placeholder="如 天津人力资源服务有限公司">
+                                <label class="form-label">授权码 <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" id="smtp_pass" placeholder="邮箱设置中获取的授权码">
+                                <small class="text-muted">QQ邮箱：设置→账户→POP3/SMTP→生成授权码</small>
+                            </div>
+                            <div class="col-md-6" id="customSmtpRow" style="display:none;">
+                                <label class="form-label">SMTP服务器地址</label>
+                                <input type="text" class="form-control" id="smtp_host_custom" placeholder="smtp.example.com">
                             </div>
                         </div>
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-save"></i> 保存邮件配置
+                            <i class="fas fa-save"></i> 保存
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary ms-2" id="testEmailBtn">
+                            <i class="fas fa-paper-plane"></i> 测试发送
                         </button>
                     </form>
-                    <small class="text-muted d-block mt-2">配置后可通过仪表盘的"发送"按钮将收据PDF发送到指定邮箱</small>
+                    <div id="smtpStatus" class="mt-2"></div>
                 </div>
             </div>
         </div>
@@ -197,6 +195,14 @@ $(document).ready(function() {
         e.preventDefault();
         saveSmtpConfig();
     });
+    $('#smtp_provider').change(function() {
+        if ($(this).val() === 'custom') {
+            $('#customSmtpRow').show();
+        } else {
+            $('#customSmtpRow').hide();
+        }
+    });
+    $('#testEmailBtn').click(testSmtp);
 });
 
 function getAuthHeaders() {
@@ -394,25 +400,48 @@ async function loadSmtpConfig() {
         const resp = await fetch('/api/admin/smtp-config', { headers: getAuthHeaders() });
         if (resp.status === 401) { checkAuth(); return; }
         const data = await resp.json();
-        $('#smtp_host').val(data.smtp_host || '');
-        $('#smtp_port').val(data.smtp_port || 587);
-        $('#smtp_user').val(data.smtp_user || '');
-        $('#smtp_from').val(data.smtp_from || '');
+        const user = data.smtp_user || '';
+        $('#smtp_user').val(user);
         if (data.has_password) {
-            $('#smtp_pass').attr('placeholder', '已设置，留空则不修改');
+            $('#smtp_pass').attr('placeholder', '已设置，留空不修改');
+        }
+        // 自动判断邮箱类型
+        if (user.endsWith('@qq.com')) { $('#smtp_provider').val('qq'); }
+        else if (user.endsWith('@163.com')) { $('#smtp_provider').val('163'); }
+        else if (user.endsWith('@126.com')) { $('#smtp_provider').val('126'); }
+        else if (user.endsWith('@aliyun.com') || user.endsWith('@enterprise.com')) { $('#smtp_provider').val('aliyun'); }
+        else if (data.smtp_host) { $('#smtp_provider').val('custom'); $('#customSmtpRow').show(); $('#smtp_host_custom').val(data.smtp_host); }
+        if ($('#smtp_provider').val() === 'custom') { $('#customSmtpRow').show(); }
+        if (data.has_password) {
+            $('#smtpStatus').html('<span class="text-success"><i class="fas fa-check-circle"></i> 邮件服务已配置</span>');
         }
     } catch (e) {}
 }
 
 async function saveSmtpConfig() {
+    const provider = $('#smtp_provider').val();
+    const smtpHosts = {
+        'qq': 'smtp.qq.com',
+        '163': 'smtp.163.com',
+        '126': 'smtp.126.com',
+        'aliyun': 'smtp.qiye.aliyun.com'
+    };
+    const host = provider === 'custom' ? $('#smtp_host_custom').val().trim() : (smtpHosts[provider] || '');
+    const user = $('#smtp_user').val().trim();
+
+    if (!user) { showAlert('请填写发件邮箱', 'danger'); return; }
+
     const config = {
-        smtp_host: $('#smtp_host').val().trim(),
-        smtp_port: parseInt($('#smtp_port').val()) || 587,
-        smtp_user: $('#smtp_user').val().trim(),
-        smtp_from: $('#smtp_from').val().trim()
+        smtp_host: host,
+        smtp_port: 587,
+        smtp_user: user,
+        smtp_from: user
     };
     const pass = $('#smtp_pass').val();
     if (pass) config.smtp_pass = pass;
+    else if (!$('#smtp_pass').attr('placeholder').includes('已设置')) {
+        showAlert('请填写授权码', 'danger'); return;
+    }
 
     try {
         showLoading();
@@ -433,6 +462,24 @@ async function saveSmtpConfig() {
     } catch (e) {
         hideLoading();
         showAlert('保存失败', 'danger');
+    }
+}
+
+async function testSmtp() {
+    const user = $('#smtp_user').val().trim();
+    if (!user) { showAlert('请先填写发件邮箱', 'danger'); return; }
+    showAlert('正在测试发送，请稍候...', 'info');
+    try {
+        const data = await apiRequest(`/api/admin/test-email`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ email: user })
+        });
+        if (data.success) {
+            showAlert('测试邮件已发送到 ' + user + '，请查收', 'success');
+        }
+    } catch (e) {
+        showAlert('测试失败: ' + e.message, 'danger');
     }
 }
 
