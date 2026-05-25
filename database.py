@@ -88,6 +88,8 @@ class Database:
             "total_amount": float(data.get("total_amount", 0)),
             "notes": data.get("notes", ""),
             "template_type": data.get("template_type", "standard"),
+            "status": data.get("status", "issued"),
+            "email": data.get("email", ""),
             "created_at": now,
             "updated_at": now
         }
@@ -114,7 +116,7 @@ class Database:
                 return r
         return None
 
-    def get_receipts(self, page=1, limit=20, search=None, currency=None, date_from=None, date_to=None):
+    def get_receipts(self, page=1, limit=20, search=None, currency=None, date_from=None, date_to=None, status=None):
         receipts = self._read_json(RECEIPTS_FILE)
         filtered = list(receipts)
 
@@ -128,6 +130,9 @@ class Database:
 
         if currency:
             filtered = [r for r in filtered if r.get("currency") == currency]
+
+        if status:
+            filtered = [r for r in filtered if r.get("status", "issued") == status]
 
         if date_from:
             filtered = [r for r in filtered if r.get("payment_date", "") >= date_from]
@@ -305,14 +310,14 @@ class Database:
 
     def init_default_templates(self):
         templates = self._read_json(TEMPLATES_FILE)
-        # 更新默认模板为最新版本（如果包含旧的不兼容CSS）
+        # 更新默认模板为最新版本（如果包含旧的不兼容CSS或旧标题）
         from pdf_generator import get_default_template_html as _get_new_tpl
         new_html = _get_new_tpl()
         updated = False
         for t in templates:
             if t.get("is_default"):
                 old_html = t.get("template_html", "")
-                if "SimSun" in old_html or "display: flex" in old_html or "宋体" in old_html:
+                if "SimSun" in old_html or "display: flex" in old_html or "宋体" in old_html or "天津人力资源服务有限公司" in old_html:
                     t["template_html"] = new_html
                     t["updated_at"] = datetime.now().isoformat()
                     updated = True

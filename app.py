@@ -263,11 +263,13 @@ def get_receipts():
         currency = request.args.get('currency', '')
         date_from = request.args.get('date_from', '')
         date_to = request.args.get('date_to', '')
+        status = request.args.get('status', '')
         result = db.get_receipts(page=page, limit=limit,
                               search=search if search else None,
                               currency=currency if currency else None,
                               date_from=date_from if date_from else None,
-                              date_to=date_to if date_to else None)
+                              date_to=date_to if date_to else None,
+                              status=status if status else None)
         return jsonify(result)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -342,6 +344,11 @@ def generate_receipt_pdf(receipt_id):
             return jsonify({'error': '收据不存在'}), 404
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
+
+        # 检查模板是否包含不兼容CSS，使用默认模板
+        if template_html and ('SimSun' in template_html or 'display: flex' in template_html or '宋体' in template_html):
+            template_html = pdf_generator.get_default_template_html()
+
         pdf_path = pdf_generator.generate_pdf(receipt, template_html)
 
         # 判断是否内联预览
@@ -395,6 +402,65 @@ def preview_receipt_from_data():
 def generate_number():
     try:
         return jsonify({'receipt_number': db.generate_receipt_number()})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/receipts/export', methods=['GET'])
+def export_receipts():
+    """导出收据为Excel文件"""
+    try:
+        search = request.args.get('search', '')
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        status = request.args.get('status', '')
+
+        result = db.get_receipts(page=1, limit=10000,
+                              search=search if search else None,
+                              date_from=date_from if date_from else None,
+                              date_to=date_to if date_to else None,
+                              status=status if status else None)
+        receipts = result['receipts']
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "收据导出"
+
+        headers = ['收据编号', '付款人', '收款人', '金额', '日期', '状态', '邮箱', '收款事由', '备注']
+        ws.append(headers)
+
+        for r in receipts:
+            status_text = '已作废' if r.get('status') == 'voided' else '已开具'
+            ws.append([
+                r.get('receipt_number', ''),
+                r.get('payer_name', ''),
+                r.get('payee_name', ''),
+                r.get('total_amount', 0),
+                r.get('payment_date', ''),
+                status_text,
+                r.get('email', ''),
+                r.get('purpose', ''),
+                r.get('notes', '')
+            ])
+
+        # 调整列宽
+        for col in ws.columns:
+            max_length = 0
+            for cell in col:
+                try:
+                    if cell.value:
+                        max_length = max(max_length, len(str(cell.value)))
+                except:
+                    pass
+            ws.column_dimensions[col[0].column_letter].width = min(max_length + 4, 40)
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        return send_file(output, as_attachment=True,
+                        download_name=f'收据导出_{datetime.now().strftime("%Y%m%d")}.xlsx',
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -660,6 +726,11 @@ def send_receipt_email(receipt_id):
         # 生成PDF
         template = db.get_default_template()
         template_html = template['template_html'] if template else None
+
+        # 检查模板是否包含不兼容CSS，使用默认模板
+        if template_html and ('SimSun' in template_html or 'display: flex' in template_html or '宋体' in template_html):
+            template_html = pdf_generator.get_default_template_html()
+
         pdf_path = pdf_generator.generate_pdf(receipt, template_html)
 
         # 读取邮件配置
@@ -670,8 +741,8 @@ def send_receipt_email(receipt_id):
         smtp_pass = os.environ.get('SMTP_PASS', admin_config.get('smtp_pass', ''))
         smtp_from = os.environ.get('SMTP_FROM', admin_config.get('smtp_from', smtp_user))
 
-        if not smtp_host or not smtp_user:
-            return jsonify({'error': '邮件服务未配置，请在系统管理中设置SMTP信息'}), 400
+        if not smtp_host or not smtp_user or not smtp_pass:
+            return jsonify({'error': '邮件服务未配置，请在系统管理→邮件发送配置中设置邮箱和授权码'}), 400
 
         # 构建邮件
         msg = MIMEMultipart()
@@ -700,6 +771,10 @@ def send_receipt_email(receipt_id):
         db.update_receipt(receipt_id, {'email': email_to})
 
         return jsonify({'success': True, 'message': f'收据已发送到 {email_to}'})
+    except smtplib.SMTPAuthenticationError:
+        return jsonify({'error': 'SMTP认证失败，请检查邮箱和授权码是否正确'}), 500
+    except smtplib.SMTPException as e:
+        return jsonify({'error': f'邮件发送失败: {str(e)}'}), 500
     except Exception as e:
         return jsonify({'error': f'发送失败: {str(e)}'}), 500
 

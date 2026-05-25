@@ -171,7 +171,7 @@ async function loadRecentReceipts() {
             const isVoided = receipt.status === 'voided';
             const statusBadge = isVoided
                 ? '<span class="badge bg-secondary">已作废</span>'
-                : '<span class="badge bg-success">有效</span>';
+                : '<span class="badge bg-success">已开具</span>';
             const voidBtnDisabled = isVoided ? 'disabled' : '';
 
             html += `<tr class="${isVoided ? 'table-secondary' : ''}">
@@ -193,6 +193,9 @@ async function loadRecentReceipts() {
                     <button class="btn btn-sm btn-primary" onclick="printReceipt(${receipt.id})" title="打印" ${voidBtnDisabled}>
                         <i class="fas fa-print"></i>
                     </button>
+                    <a href="/api/receipts/${receipt.id}/pdf" class="btn btn-sm btn-danger" title="PDF下载" target="_blank">
+                        <i class="fas fa-file-pdf"></i>
+                    </a>
                 </td>
             </tr>`;
         });
@@ -230,7 +233,7 @@ async function confirmSendEmail() {
         setTimeout(() => { $('#sendEmailModal').modal('hide'); loadRecentReceipts(); }, 1500);
     } catch (error) {
         hideLoading();
-        $('#sendResult').html(`<div class="alert alert-danger">${error.message}</div>`);
+        $('#sendResult').html(`<div class="alert alert-danger">${error.message || '发送失败'}</div>`);
     }
 }
 

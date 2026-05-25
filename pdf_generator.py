@@ -4,9 +4,24 @@ PDF生成模块
 使用xhtml2pdf将HTML转换为PDF
 """
 from xhtml2pdf import pisa
+from xhtml2pdf.default import DEFAULT_CSS
 import os
 import sys
 import base64
+
+
+# 注册中文字体 - 使用reportlab内置CID字体（跨平台无需额外字体文件）
+def _register_cjk_fonts():
+    """注册中文字体以支持PDF中文显示"""
+    from reportlab.pdfbase import pdfmetrics
+    from reportlab.pdfbase.cidfonts import UnicodeCIDFont
+
+    try:
+        pdfmetrics.registerFont(UnicodeCIDFont('STSong-Light'))
+    except Exception as e:
+        print(f"Warning: Failed to register STSong-Light: {e}")
+
+_register_cjk_fonts()
 
 
 def num_to_chinese(num):
@@ -92,8 +107,15 @@ def generate_pdf(receipt: dict, template_html: str = None) -> str:
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_path = os.path.join(pdf_dir, pdf_filename)
 
+    # link callback for xhtml2pdf to resolve local file paths
+    def link_callback(uri, rel):
+        if uri.startswith('/') or uri.startswith('file://'):
+            return uri.replace('file://', '')
+        return os.path.join(base_path, uri)
+
     with open(pdf_path, 'wb') as pdf_file:
-        pisa_status = pisa.CreatePDF(html_content, dest=pdf_file, encoding='UTF-8')
+        pisa_status = pisa.CreatePDF(html_content, dest=pdf_file, encoding='UTF-8',
+                                      link_callback=link_callback)
 
     if pisa_status.err:
         raise Exception("PDF生成失败")
@@ -156,10 +178,10 @@ def render_template(template: str, data: dict) -> str:
     else:
         data['total_amount_display'] = str(total_amount)
 
-    # 财务章图片
-    seal_b64 = get_seal_base64()
-    if seal_b64:
-        data['seal_img'] = '<img src="data:image/png;base64,' + seal_b64 + '" style="width:80px; height:80px; opacity:0.7;" />'
+    # 财务章图片 - xhtml2pdf不支持base64，使用文件路径
+    seal_path = os.path.join(get_base_path(), 'static', 'seal.png')
+    if os.path.exists(seal_path):
+        data['seal_img'] = '<img src="' + seal_path + '" style="width:80px; height:80px; opacity:0.7;" />'
     else:
         data['seal_img'] = ''
 
@@ -178,12 +200,18 @@ def get_default_template_html() -> str:
 <head>
 <meta charset="UTF-8">
 <style>
+@font-face {
+    font-family: STSong-Light;
+    src: url('STSong-Light');
+    -pdf-font-name: STSong-Light;
+    -pdf-use-cidfont: true;
+}
 @page {
     size: 24cm 14cm landscape;
     margin: 1cm 1.5cm;
 }
 body {
-    font-family: Arial, Helvetica, sans-serif;
+    font-family: STSong-Light, SimSun, Arial, Helvetica, sans-serif;
     font-size: 12px;
     line-height: 1.5;
     color: #000;
@@ -237,9 +265,7 @@ h3 {
     vertical-align: bottom;
 }
 .seal-area {
-    display: inline-block;
     margin-left: 5px;
-    vertical-align: bottom;
 }
 .note {
     text-align: center;
@@ -251,7 +277,7 @@ h3 {
 </head>
 <body>
 <div class="receipt-wrap">
-    <h2>天津人力资源服务有限公司</h2>
+    <h2>天津俊途人力资源服务有限公司</h2>
     <h3>电 子 收 据</h3>
 
     <table class="info-row" cellpadding="0" cellspacing="0">

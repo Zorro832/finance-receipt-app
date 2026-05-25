@@ -14,22 +14,20 @@
                 <input type="text" class="form-control" id="searchInput" placeholder="搜索收据编号、付款方、事由...">
             </div>
             <div class="col-md-2 mb-3">
-                <label class="form-label">币种</label>
-                <select class="form-select" id="currencyFilter">
-                    <option value="">全部</option>
-                    <option value="CNY">¥ CNY</option>
-                    <option value="USD">$ USD</option>
-                    <option value="EUR">€ EUR</option>
-                    <option value="GBP">£ GBP</option>
-                </select>
-            </div>
-            <div class="col-md-2 mb-3">
                 <label class="form-label">开始日期</label>
                 <input type="date" class="form-control" id="dateFromFilter">
             </div>
             <div class="col-md-2 mb-3">
                 <label class="form-label">结束日期</label>
                 <input type="date" class="form-control" id="dateToFilter">
+            </div>
+            <div class="col-md-2 mb-3">
+                <label class="form-label">状态</label>
+                <select class="form-select" id="statusFilter">
+                    <option value="">全部</option>
+                    <option value="issued">已开具</option>
+                    <option value="voided">已作废</option>
+                </select>
             </div>
             <div class="col-md-2 mb-3 d-flex align-items-end">
                 <button class="btn btn-primary w-100" id="searchBtn">
@@ -46,10 +44,7 @@
         <span>收据列表</span>
         <div>
             <button class="btn btn-sm btn-success" id="exportBtn">
-                <i class="fas fa-download"></i> 导出
-            </button>
-            <button class="btn btn-sm btn-danger" id="deleteSelectedBtn" disabled>
-                <i class="fas fa-trash"></i> 删除选中
+                <i class="fas fa-download"></i> 导出Excel
             </button>
         </div>
     </div>
@@ -58,19 +53,16 @@
             <table class="table table-hover">
                 <thead>
                     <tr>
-                        <th><input type="checkbox" id="selectAll"></th>
                         <th>收据编号</th>
                         <th>付款方</th>
                         <th>金额</th>
-                        <th>币种</th>
                         <th>日期</th>
+                        <th>状态</th>
                         <th>操作</th>
                     </tr>
                 </thead>
                 <tbody id="receiptsTable">
-                    <tr>
-                        <td colspan="7" class="text-center">加载中...</td>
-                    </tr>
+                    <tr><td colspan="6" class="text-center">加载中...</td></tr>
                 </tbody>
             </table>
         </div>
@@ -81,176 +73,197 @@
         </nav>
     </div>
 </div>
+
+<!-- 发送邮件模态框 -->
+<div class="modal fade" id="sendEmailModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">发送收据到邮箱</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="sendReceiptId">
+                <div class="mb-3">
+                    <label class="form-label">收件人邮箱</label>
+                    <input type="email" class="form-control" id="sendEmailInput" placeholder="请输入邮箱地址" required>
+                    <small class="text-muted" id="sendReceiptInfo"></small>
+                </div>
+                <div id="sendResult"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" id="confirmSendBtn">
+                    <i class="fas fa-paper-plane"></i> 发送
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let currentPage = 1;
 const limit = 20;
-let selectedReceipts = new Set();
 
 $(document).ready(function() {
     loadReceipts(1);
     
-    // 搜索按钮
-    $('#searchBtn').click(function() {
-        loadReceipts(1);
-    });
-    
-    // 回车搜索
-    $('#searchInput').keypress(function(e) {
-        if (e.which === 13) {
-            loadReceipts(1);
-        }
-    });
-    
-    // 全选
-    $('#selectAll').change(function() {
-        const isChecked = $(this).is(':checked');
-        $('input[name="receiptCheckbox"]').prop('checked', isChecked);
-        updateSelectedReceipts();
-    });
+    $('#searchBtn').click(function() { loadReceipts(1); });
+    $('#searchInput').keypress(function(e) { if (e.which === 13) loadReceipts(1); });
+    $('#confirmSendBtn').click(confirmSendEmail);
 });
 
-// 加载收据列表
 async function loadReceipts(page) {
     try {
         showLoading();
         
-        const params = new URLSearchParams({
-            page: page,
-            limit: limit
-        });
-        
+        const params = new URLSearchParams({ page: page, limit: limit });
         const search = $('#searchInput').val();
         if (search) params.append('search', search);
-        
-        const currency = $('#currencyFilter').val();
-        if (currency) params.append('currency', currency);
-        
         const dateFrom = $('#dateFromFilter').val();
         if (dateFrom) params.append('date_from', dateFrom);
-        
         const dateTo = $('#dateToFilter').val();
         if (dateTo) params.append('date_to', dateTo);
+        const status = $('#statusFilter').val();
+        if (status) params.append('status', status);
         
         const data = await apiRequest(`/api/receipts?${params}`);
-        
         hideLoading();
         renderReceipts(data.receipts);
         renderPagination(data.total_pages, page);
-        
         currentPage = page;
     } catch (error) {
         hideLoading();
-        console.error('加载收据失败:', error);
-        $('#receiptsTable').html('<tr><td colspan="7" class="text-center text-danger">加载失败</td></tr>');
+        $('#receiptsTable').html('<tr><td colspan="6" class="text-center text-danger">加载失败</td></tr>');
     }
 }
 
-// 渲染收据列表
 function renderReceipts(receipts) {
     if (receipts.length === 0) {
-        $('#receiptsTable').html('<tr><td colspan="7" class="text-center">暂无收据记录</td></tr>');
+        $('#receiptsTable').html('<tr><td colspan="6" class="text-center">暂无收据记录</td></tr>');
         return;
     }
     
     let html = '';
     receipts.forEach(receipt => {
-        const currencySymbols = { 'CNY': '¥', 'USD': '$', 'EUR': '€', 'GBP': '£' };
-        const symbol = currencySymbols[receipt.currency] || '$';
+        const isVoided = receipt.status === 'voided';
+        const statusBadge = isVoided
+            ? '<span class="badge bg-secondary">已作废</span>'
+            : '<span class="badge bg-success">已开具</span>';
+        const voidBtnDisabled = isVoided ? 'disabled' : '';
         
-        html += `
-            <tr>
-                <td><input type="checkbox" name="receiptCheckbox" value="${receipt.id}"></td>
-                <td><strong>${receipt.receipt_number}</strong></td>
-                <td>${receipt.payer_name}</td>
-                <td><strong class="text-primary">${symbol}${receipt.total_amount.toFixed(2)}</strong></td>
-                <td><span class="badge bg-info">${receipt.currency}</span></td>
-                <td>${receipt.payment_date}</td>
-                <td>
-                    <a href="/receipt/${receipt.id}" class="btn btn-sm btn-info" title="查看">
-                        <i class="fas fa-eye"></i>
-                    </a>
-                    <a href="/api/receipts/${receipt.id}/pdf" class="btn btn-sm btn-danger" title="下载PDF" target="_blank">
-                        <i class="fas fa-file-pdf"></i>
-                    </a>
-                    <button class="btn btn-sm btn-warning" onclick="deleteReceipt(${receipt.id})" title="删除">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>
-        `;
+        html += `<tr class="${isVoided ? 'table-secondary' : ''}">
+            <td><strong>${receipt.receipt_number}</strong></td>
+            <td>${receipt.payer_name}</td>
+            <td><strong class="text-primary">¥${receipt.total_amount.toFixed(2)}</strong></td>
+            <td>${receipt.payment_date}</td>
+            <td>${statusBadge}</td>
+            <td>
+                <a href="/receipt/${receipt.id}" class="btn btn-sm btn-info" title="查看">
+                    <i class="fas fa-eye"></i>
+                </a>
+                <button class="btn btn-sm btn-success" onclick="openSendEmail(${receipt.id}, '${receipt.receipt_number}', '${receipt.email || ''}')" title="发送" ${voidBtnDisabled}>
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+                <button class="btn btn-sm btn-warning" onclick="voidReceipt(${receipt.id}, '${receipt.receipt_number}')" title="作废" ${voidBtnDisabled}>
+                    <i class="fas fa-ban"></i>
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="printReceipt(${receipt.id})" title="打印" ${voidBtnDisabled}>
+                    <i class="fas fa-print"></i>
+                </button>
+                <a href="/api/receipts/${receipt.id}/pdf" class="btn btn-sm btn-danger" title="PDF下载" target="_blank">
+                    <i class="fas fa-file-pdf"></i>
+                </a>
+            </td>
+        </tr>`;
     });
     
     $('#receiptsTable').html(html);
-    
-    // 绑定复选框事件
-    $('input[name="receiptCheckbox"]').change(updateSelectedReceipts);
 }
 
-// 渲染分页
 function renderPagination(totalPages, currentPage) {
     let html = '';
-    
-    // 上一页
-    html += `
-        <li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
-            <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${currentPage - 1})">上一页</a>
-        </li>
-    `;
-    
-    // 页码
+    html += `<li class="page-item ${currentPage === 1 ? 'disabled' : ''}">
+        <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${currentPage - 1})">上一页</a></li>`;
     for (let i = 1; i <= totalPages; i++) {
         if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 2) {
-            html += `
-                <li class="page-item ${i === currentPage ? 'active' : ''}">
-                    <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${i})">${i}</a>
-                </li>
-            `;
+            html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${i})">${i}</a></li>`;
         } else if (Math.abs(i - currentPage) === 3) {
             html += `<li class="page-item disabled"><a class="page-link" href="#">...</a></li>`;
         }
     }
-    
-    // 下一页
-    html += `
-        <li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
-            <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${currentPage + 1})">下一页</a>
-        </li>
-    `;
-    
+    html += `<li class="page-item ${currentPage === totalPages ? 'disabled' : ''}">
+        <a class="page-link" href="javascript:void(0)" onclick="loadReceipts(${currentPage + 1})">下一页</a></li>`;
     $('#pagination').html(html);
 }
 
-// 更新选中的收据
-function updateSelectedReceipts() {
-    selectedReceipts.clear();
-    $('input[name="receiptCheckbox"]:checked').each(function() {
-        selectedReceipts.add($(this).val());
-    });
-    
-    $('#deleteSelectedBtn').prop('disabled', selectedReceipts.size === 0);
+function openSendEmail(receiptId, receiptNumber, existingEmail) {
+    $('#sendReceiptId').val(receiptId);
+    $('#sendEmailInput').val(existingEmail || '');
+    $('#sendReceiptInfo').text('收据编号: ' + receiptNumber);
+    $('#sendResult').html('');
+    $('#sendEmailModal').modal('show');
 }
 
-// 删除收据
-async function deleteReceipt(receiptId) {
-    if (!confirm('确定要删除这张收据吗？')) {
+async function confirmSendEmail() {
+    const receiptId = $('#sendReceiptId').val();
+    const email = $('#sendEmailInput').val().trim();
+    if (!email || !email.includes('@')) {
+        $('#sendResult').html('<div class="alert alert-danger">请输入有效的邮箱地址</div>');
         return;
     }
-    
     try {
-        await apiRequest(`/api/receipts/${receiptId}`, { method: 'DELETE' });
-        showAlert('删除成功', 'success');
-        loadReceipts(currentPage);
+        showLoading();
+        const data = await apiRequest(`/api/receipts/${receiptId}/send-email`, {
+            method: 'POST',
+            body: JSON.stringify({ email: email })
+        });
+        hideLoading();
+        $('#sendResult').html('<div class="alert alert-success">发送成功！</div>');
+        setTimeout(() => { $('#sendEmailModal').modal('hide'); loadReceipts(currentPage); }, 1500);
     } catch (error) {
-        console.error('删除失败:', error);
+        hideLoading();
+        $('#sendResult').html(`<div class="alert alert-danger">${error.message || '发送失败'}</div>`);
     }
 }
 
-// 导出数据
+async function voidReceipt(receiptId, receiptNumber) {
+    if (!confirm(`确定要作废收据「${receiptNumber}」吗？作废后不可恢复。`)) return;
+    try {
+        await apiRequest(`/api/receipts/${receiptId}/void`, { method: 'PUT' });
+        showAlert('收据已作废', 'success');
+        loadReceipts(currentPage);
+    } catch (error) {
+        showAlert('作废失败: ' + (error.message || ''), 'danger');
+    }
+}
+
+function printReceipt(receiptId) {
+    const printUrl = `/api/receipts/${receiptId}/pdf?inline=1`;
+    const printWindow = window.open(printUrl, '_blank');
+    if (printWindow) {
+        printWindow.onload = function() {
+            setTimeout(function() { printWindow.print(); }, 1000);
+        };
+    }
+}
+
+// 导出Excel
 $('#exportBtn').click(function() {
-    showAlert('导出功能开发中...', 'info');
+    const params = new URLSearchParams();
+    const search = $('#searchInput').val();
+    if (search) params.append('search', search);
+    const dateFrom = $('#dateFromFilter').val();
+    if (dateFrom) params.append('date_from', dateFrom);
+    const dateTo = $('#dateToFilter').val();
+    if (dateTo) params.append('date_to', dateTo);
+    const status = $('#statusFilter').val();
+    if (status) params.append('status', status);
+    
+    window.open('/api/receipts/export?' + params.toString(), '_blank');
 });
 </script>
 {% endblock %}
