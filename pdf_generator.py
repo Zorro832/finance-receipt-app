@@ -87,12 +87,18 @@ def get_base_path():
 
 
 def get_seal_base64():
-    """获取财务章图片的base64编码"""
-    seal_path = os.path.join(get_base_path(), 'static', 'seal.png')
-    if os.path.exists(seal_path):
-        with open(seal_path, 'rb') as f:
-            return base64.b64encode(f.read()).decode('utf-8')
-    return ''
+    """获取财务章图片的base64编码（支持png/jpg/gif）"""
+    base_path = get_base_path()
+    # 尝试多种格式
+    for ext in ['.png', '.jpg', '.jpeg', '.gif']:
+        seal_path = os.path.join(base_path, 'static', f'seal{ext}')
+        if os.path.exists(seal_path):
+            with open(seal_path, 'rb') as f:
+                data = base64.b64encode(f.read()).decode('utf-8')
+                # 返回格式: (mime_type, base64_data)
+                mime = 'image/png' if ext == '.png' else ('image/jpeg' if ext in ('.jpg', '.jpeg') else 'image/gif')
+                return mime, data
+    return None, ''
 
 
 def generate_pdf(receipt: dict, template_html: str = None) -> str:
@@ -185,9 +191,9 @@ def render_template(template: str, data: dict) -> str:
         data['total_amount_display'] = str(total_amount)
 
     # 财务章图片 - 预览和PDF都用base64嵌入（最可靠）
-    seal_base64 = get_seal_base64()
+    mime_type, seal_base64 = get_seal_base64()
     if seal_base64:
-        data['seal_img'] = '<img src="data:image/png;base64,' + seal_base64 + '" style="width:80px; height:80px;" />'
+        data['seal_img'] = f'<img src="data:{mime_type};base64,{seal_base64}" style="width:80px; height:80px;" />'
     else:
         data['seal_img'] = ''
 

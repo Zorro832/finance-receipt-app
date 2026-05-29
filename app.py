@@ -894,7 +894,7 @@ def test_send_email():
 @app.route('/api/admin/seal', methods=['POST'])
 @require_auth
 def upload_seal():
-    """上传财务章图片"""
+    """上传财务章图片（直接保存，不依赖Pillow）"""
     try:
         if 'file' not in request.files:
             return jsonify({'error': '请选择图片文件'}), 400
@@ -907,25 +907,18 @@ def upload_seal():
         base_path = os.path.abspath(os.path.dirname(__file__))
         seal_dir = os.path.join(base_path, 'static')
         os.makedirs(seal_dir, exist_ok=True)
-        seal_path = os.path.join(seal_dir, 'seal.png')
 
-        # 保存为 PNG
-        from PIL import Image
-        img = Image.open(file.stream)
-        # 转换RGBA到RGB（如果需要）
-        if img.mode in ('RGBA', 'LA', 'P'):
-            # 保留透明通道或转换为RGBA
-            img = img.convert('RGBA')
-        img.save(seal_path, 'PNG')
+        # 直接保存原始文件（保留原始格式）
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in ('.jpg', '.jpeg'):
+            seal_path = os.path.join(seal_dir, 'seal.jpg')
+        elif ext == '.gif':
+            seal_path = os.path.join(seal_dir, 'seal.gif')
+        else:
+            seal_path = os.path.join(seal_dir, 'seal.png')
 
-        return jsonify({'success': True, 'message': '财务章图片已更新'})
-    except ImportError:
-        # 如果没有 PIL，直接保存
-        base_path = os.path.abspath(os.path.dirname(__file__))
-        seal_dir = os.path.join(base_path, 'static')
-        os.makedirs(seal_dir, exist_ok=True)
-        seal_path = os.path.join(seal_dir, 'seal.png')
         file.save(seal_path)
+
         return jsonify({'success': True, 'message': '财务章图片已更新'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
