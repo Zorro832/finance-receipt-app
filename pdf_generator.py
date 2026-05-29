@@ -208,33 +208,37 @@ def get_default_template_html() -> str:
 }
 @page {
     size: 24cm 14cm landscape;
-    margin: 1cm 1.5cm;
+    margin: 0.8cm 1.2cm;
 }
 body {
     font-family: STSong-Light, SimSun, Arial, Helvetica, sans-serif;
-    font-size: 12px;
-    line-height: 1.5;
+    font-size: 11px;
+    line-height: 1.3;
     color: #000;
+    margin: 0;
+    padding: 0;
 }
 .receipt-wrap {
     width: 100%;
+    page-break-inside: avoid !important;
+    -pdf-page-break-inside: avoid;
 }
 h2 {
     text-align: center;
-    font-size: 18px;
+    font-size: 16px;
     margin: 0 0 2px 0;
     letter-spacing: 2px;
 }
 h3 {
     text-align: center;
-    font-size: 15px;
-    margin: 0 0 8px 0;
+    font-size: 14px;
+    margin: 0 0 6px 0;
     letter-spacing: 6px;
 }
 .info-row {
     width: 100%;
-    margin-bottom: 4px;
-    font-size: 11px;
+    margin-bottom: 3px;
+    font-size: 10px;
 }
 .info-row td {
     padding: 1px 0;
@@ -243,11 +247,13 @@ h3 {
     width: 100%;
     border-collapse: collapse;
     border: 2px solid #000;
+    page-break-inside: avoid !important;
+    -pdf-page-break-inside: avoid;
 }
 .mtbl td {
     border: 1px solid #333;
-    padding: 4px 6px;
-    font-size: 11px;
+    padding: 3px 6px;
+    font-size: 10px;
     vertical-align: middle;
 }
 .mtbl .lb {
@@ -255,28 +261,37 @@ h3 {
     font-weight: bold;
     text-align: center;
 }
-.sign-row {
-    width: 100%;
-    margin-top: 15px;
-    font-size: 11px;
+.sign-area {
+    border: none !important;
+    padding: 0 !important;
 }
-.sign-row td {
-    padding: 3px 0;
+.sign-area table {
+    width: 100%;
+    border-collapse: collapse;
+}
+.sign-area td {
+    border: none !important;
+    padding: 2px 0;
+    font-size: 10px;
     vertical-align: bottom;
 }
 .seal-area {
-    margin-left: 5px;
+    margin-left: 3px;
 }
 .note {
     text-align: center;
-    font-size: 9px;
+    font-size: 8px;
     color: #888;
-    margin-top: 12px;
+    margin-top: 6px;
+}
+.no-break {
+    page-break-inside: avoid !important;
+    -pdf-page-break-inside: avoid;
 }
 </style>
 </head>
 <body>
-<div class="receipt-wrap">
+<div class="receipt-wrap no-break">
     <h2>天津俊途人力资源服务有限公司</h2>
     <h3>电 子 收 据</h3>
 
@@ -289,9 +304,9 @@ h3 {
 
     <table class="mtbl" cellpadding="0" cellspacing="0">
         <tr>
-            <td class="lb" style="width:60px;">付款人</td>
+            <td class="lb" style="width:55px;">付款人</td>
             <td>{{ payer_name }}</td>
-            <td class="lb" style="width:60px;">收款人</td>
+            <td class="lb" style="width:55px;">收款人</td>
             <td>天津俊途人力资源服务有限公司</td>
         </tr>
         <tr>
@@ -303,18 +318,22 @@ h3 {
             <td class="lb">合计金额（大写）</td>
             <td>{{ total_amount_cn }}</td>
             <td class="lb">合计金额（小写）</td>
-            <td style="text-align:right; font-weight:bold; font-size:13px;">{{ total_amount_display }}</td>
+            <td style="text-align:right; font-weight:bold; font-size:12px;">{{ total_amount_display }}</td>
         </tr>
         <tr>
             <td class="lb">备注</td>
             <td colspan="3">{{ notes }}</td>
         </tr>
-    </table>
-
-    <table class="sign-row" cellpadding="0" cellspacing="0">
+        <!-- 签名区域整合进表格，防止分页 -->
         <tr>
-            <td style="width:50%;">开具人：陈婷</td>
-            <td style="width:50%; text-align:right;">收款单位（盖章）：<span class="seal-area">{{ seal_img }}</span></td>
+            <td colspan="4" class="sign-area">
+                <table cellpadding="0" cellspacing="0">
+                    <tr>
+                        <td style="width:50%;">开具人：{{ issuer }}</td>
+                        <td style="width:50%; text-align:right;">收款单位（盖章）：<span class="seal-area">{{ seal_img }}</span></td>
+                    </tr>
+                </table>
+            </td>
         </tr>
     </table>
 

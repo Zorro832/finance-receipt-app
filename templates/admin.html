@@ -169,6 +169,43 @@
             </div>
         </div>
     </div>
+
+    <!-- 财务章图片管理 -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <i class="fas fa-stamp"></i> 财务章图片管理
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div id="sealPreviewArea" class="border rounded p-3 text-center" style="min-height: 150px;">
+                                <p class="text-muted mb-0">暂无财务章图片</p>
+                            </div>
+                        </div>
+                        <div class="col-md-8">
+                            <form id="sealForm" enctype="multipart/form-data">
+                                <div class="mb-3">
+                                    <label class="form-label">上传新的财务章图片</label>
+                                    <input type="file" class="form-control" id="sealFile" accept=".png,.jpg,.jpeg,.gif" required>
+                                    <small class="text-muted">支持 PNG、JPG、JPEG、GIF 格式，建议尺寸 300x300 像素以上，透明背景效果最佳</small>
+                                </div>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-upload"></i> 上传
+                                    </button>
+                                    <button type="button" class="btn btn-outline-danger" id="deleteSealBtn">
+                                        <i class="fas fa-trash"></i> 删除现有图片
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 {% endblock %}
 
@@ -196,6 +233,13 @@ $(document).ready(function() {
         e.preventDefault();
         saveSmtpConfig();
     });
+    $('#sealForm').submit(function(e) {
+        e.preventDefault();
+        uploadSeal();
+    });
+    $('#deleteSealBtn').click(deleteSeal);
+    loadSealPreview();
+
     $('#smtp_provider').change(function() {
         if ($(this).val() === 'custom') {
             $('#customSmtpRow').show();
@@ -483,6 +527,73 @@ async function testSmtp() {
         }
     } catch (e) {
         showAlert('测试失败: ' + e.message, 'danger');
+    }
+}
+
+async function loadSealPreview() {
+    // 尝试加载当前章图片
+    const sealUrl = '/static/seal.png?t=' + Date.now();
+    const img = new Image();
+    img.onload = function() {
+        $('#sealPreviewArea').html('<img src="' + sealUrl + '" style="max-width:100%; max-height:200px;" />');
+    };
+    img.onerror = function() {
+        $('#sealPreviewArea').html('<p class="text-muted mb-0">暂无财务章图片</p>');
+    };
+    img.src = sealUrl;
+}
+
+async function uploadSeal() {
+    const fileInput = $('#sealFile')[0];
+    if (!fileInput.files || fileInput.files.length === 0) {
+        showAlert('请选择图片文件', 'danger');
+        return;
+    }
+    const file = fileInput.files[0];
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+        showLoading();
+        const resp = await fetch('/api/admin/seal', {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + adminToken },
+            body: formData
+        });
+        const data = await resp.json();
+        hideLoading();
+        if (data.success) {
+            showAlert('财务章图片已上传', 'success');
+            $('#sealFile').val('');
+            loadSealPreview();
+        } else {
+            showAlert(data.error || '上传失败', 'danger');
+        }
+    } catch (e) {
+        hideLoading();
+        showAlert('上传失败: ' + e.message, 'danger');
+    }
+}
+
+async function deleteSeal() {
+    if (!confirm('确定要删除财务章图片吗？删除后收据将不显示盖章。')) return;
+    try {
+        showLoading();
+        const resp = await fetch('/api/admin/seal', {
+            method: 'DELETE',
+            headers: getAuthHeaders()
+        });
+        const data = await resp.json();
+        hideLoading();
+        if (data.success) {
+            showAlert('财务章图片已删除', 'success');
+            loadSealPreview();
+        } else {
+            showAlert(data.error || '删除失败', 'danger');
+        }
+    } catch (e) {
+        hideLoading();
+        showAlert('删除失败: ' + e.message, 'danger');
     }
 }
 
