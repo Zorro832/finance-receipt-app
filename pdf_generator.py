@@ -107,10 +107,16 @@ def generate_pdf(receipt: dict, template_html: str = None) -> str:
     os.makedirs(pdf_dir, exist_ok=True)
     pdf_path = os.path.join(pdf_dir, pdf_filename)
 
-    # link callback for xhtml2pdf to resolve local file paths
+    # link callback: 让 xhtml2pdf 能找到本地文件（图片等）
     def link_callback(uri, rel):
-        if uri.startswith('/') or uri.startswith('file://'):
+        if uri.startswith('data:'):
+            return uri  # base64 直接返回
+        if uri.startswith('/static/'):
+            # /static/seal.png -> <base_path>/static/seal.png
+            return os.path.join(base_path, uri.lstrip('/'))
+        if uri.startswith('/'):
             return uri.replace('file://', '')
+        # 相对路径
         return os.path.join(base_path, uri)
 
     with open(pdf_path, 'wb') as pdf_file:
@@ -178,10 +184,11 @@ def render_template(template: str, data: dict) -> str:
     else:
         data['total_amount_display'] = str(total_amount)
 
-    # 财务章图片 - xhtml2pdf不支持base64，使用文件路径
+    # 财务章图片 - 使用相对路径，让 link_callback 处理
     seal_path = os.path.join(get_base_path(), 'static', 'seal.png')
     if os.path.exists(seal_path):
-        data['seal_img'] = '<img src="' + seal_path + '" style="width:80px; height:80px; opacity:0.7;" />'
+        # 使用 /static/ 开头路径，link_callback 会转换为实际路径
+        data['seal_img'] = '<img src="/static/seal.png" style="width:80px; height:80px;" />'
     else:
         data['seal_img'] = ''
 
@@ -195,151 +202,57 @@ def render_template(template: str, data: dict) -> str:
 
 
 def get_default_template_html() -> str:
+    """读取默认收据模板HTML文件"""
+    template_path = os.path.join(get_base_path(), 'templates', 'default_receipt.html')
+    if os.path.exists(template_path):
+        with open(template_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    # 如果文件不存在，返回内置默认模板（备用）
+    return _get_builtin_template()
+
+
+def _get_builtin_template() -> str:
+    """内置备用模板（防止文件丢失）"""
     return """<!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
+<html><head><meta charset="UTF-8">
 <style>
-@font-face {
-    font-family: STSong-Light;
-    src: url('STSong-Light');
-    -pdf-font-name: STSong-Light;
-    -pdf-use-cidfont: true;
-}
-@page {
-    size: 24cm 14cm landscape;
-    margin: 0.8cm 1.2cm;
-}
-body {
-    font-family: STSong-Light, SimSun, Arial, Helvetica, sans-serif;
-    font-size: 11px;
-    line-height: 1.3;
-    color: #000;
-    margin: 0;
-    padding: 0;
-}
-.receipt-wrap {
-    width: 100%;
-    page-break-inside: avoid !important;
-    -pdf-page-break-inside: avoid;
-}
-h2 {
-    text-align: center;
-    font-size: 16px;
-    margin: 0 0 2px 0;
-    letter-spacing: 2px;
-}
-h3 {
-    text-align: center;
-    font-size: 14px;
-    margin: 0 0 6px 0;
-    letter-spacing: 6px;
-}
-.info-row {
-    width: 100%;
-    margin-bottom: 3px;
-    font-size: 10px;
-}
-.info-row td {
-    padding: 1px 0;
-}
-.mtbl {
-    width: 100%;
-    border-collapse: collapse;
-    border: 2px solid #000;
-    page-break-inside: avoid !important;
-    -pdf-page-break-inside: avoid;
-}
-.mtbl td {
-    border: 1px solid #333;
-    padding: 3px 6px;
-    font-size: 10px;
-    vertical-align: middle;
-}
-.mtbl .lb {
-    background-color: #f0f0f0;
-    font-weight: bold;
-    text-align: center;
-}
-.sign-area {
-    border: none !important;
-    padding: 0 !important;
-}
-.sign-area table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.sign-area td {
-    border: none !important;
-    padding: 2px 0;
-    font-size: 10px;
-    vertical-align: bottom;
-}
-.seal-area {
-    margin-left: 3px;
-}
-.note {
-    text-align: center;
-    font-size: 8px;
-    color: #888;
-    margin-top: 6px;
-}
-.no-break {
-    page-break-inside: avoid !important;
-    -pdf-page-break-inside: avoid;
-}
-</style>
-</head>
+@font-face { font-family: STSong-Light; src: url('STSong-Light'); -pdf-font-name: STSong-Light; -pdf-use-cidfont: true; }
+@page { size: A4 portrait; margin: 1.2cm 1.5cm 1cm 1.5cm; }
+body { font-family: STSong-Light, SimSun, Arial, sans-serif; font-size: 11px; color: #000; margin:0; padding:0; }
+.receipt-wrap { width: 100%; }
+h2 { text-align: center; font-size: 18px; margin: 0 0 2px 0; letter-spacing: 2px; font-weight: bold; }
+h3 { text-align: center; font-size: 15px; margin: 0 0 10px 0; letter-spacing: 8px; font-weight: bold; }
+.info-row { width: 100%; margin-bottom: 5px; font-size: 11px; }
+.info-row td { padding: 1px 0; }
+.mtbl { width: 100%; border-collapse: collapse; border: 2px solid #000; table-layout: fixed; }
+.mtbl tr { page-break-inside: avoid; -pdf-keep-in-frame-mode: shrink; }
+.mtbl td { border: 1px solid #333; padding: 4px 8px; font-size: 11px; vertical-align: middle; word-wrap: break-word; }
+.mtbl .lb { background-color: #f0f0f0; font-weight: bold; text-align: center; width: 15%; }
+.sign-td { border: none !important; padding: 8px 0 0 0 !important; }
+.sign-table { width: 100%; border-collapse: collapse; }
+.sign-table td { border: none !important; padding: 4px 0; font-size: 11px; vertical-align: bottom; }
+.seal-area { text-align: right; padding-right: 10px !important; }
+.note { text-align: center; font-size: 9px; color: #888; margin-top: 10px; }
+</style></head>
 <body>
-<div class="receipt-wrap no-break">
+<div class="receipt-wrap">
     <h2>天津俊途人力资源服务有限公司</h2>
     <h3>电 子 收 据</h3>
-
-    <table class="info-row" cellpadding="0" cellspacing="0">
-        <tr>
-            <td style="text-align:left;">填制日期：{{ payment_date }}</td>
-            <td style="text-align:right;">票号：{{ receipt_number }}</td>
-        </tr>
-    </table>
-
+    <table class="info-row" cellpadding="0" cellspacing="0"><tr>
+        <td style="text-align:left; width:50%;">填制日期：{{ payment_date }}</td>
+        <td style="text-align:right; width:50%;">票号：{{ receipt_number }}</td>
+    </tr></table>
     <table class="mtbl" cellpadding="0" cellspacing="0">
-        <tr>
-            <td class="lb" style="width:55px;">付款人</td>
-            <td>{{ payer_name }}</td>
-            <td class="lb" style="width:55px;">收款人</td>
-            <td>天津俊途人力资源服务有限公司</td>
-        </tr>
-        <tr>
-            <td class="lb" colspan="2">收款内容</td>
-            <td class="lb" colspan="2">金额</td>
-        </tr>
+        <tr><td class="lb">付款人</td><td style="width:35%;">{{ payer_name }}</td><td class="lb" style="width:15%;">收款人</td><td style="width:35%;">天津俊途人力资源服务有限公司</td></tr>
+        <tr><td class="lb" colspan="2">收款内容</td><td class="lb" colspan="2">金额</td></tr>
         {{ items_html }}
-        <tr>
-            <td class="lb">合计金额（大写）</td>
-            <td>{{ total_amount_cn }}</td>
-            <td class="lb">合计金额（小写）</td>
-            <td style="text-align:right; font-weight:bold; font-size:12px;">{{ total_amount_display }}</td>
-        </tr>
-        <tr>
-            <td class="lb">备注</td>
-            <td colspan="3">{{ notes }}</td>
-        </tr>
-        <!-- 签名区域整合进表格，防止分页 -->
-        <tr>
-            <td colspan="4" class="sign-area">
-                <table cellpadding="0" cellspacing="0">
-                    <tr>
-                        <td style="width:50%;">开具人：{{ issuer }}</td>
-                        <td style="width:50%; text-align:right;">收款单位（盖章）：<span class="seal-area">{{ seal_img }}</span></td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
+        <tr><td class="lb">合计金额（大写）</td><td>{{ total_amount_cn }}</td><td class="lb">合计金额（小写）</td><td style="text-align:right; font-weight:bold; font-size:13px;">{{ total_amount_display }}</td></tr>
+        <tr><td class="lb">备注</td><td colspan="3">{{ notes }}</td></tr>
+        <tr><td colspan="4" class="sign-td"><table class="sign-table" cellpadding="0" cellspacing="0"><tr>
+            <td style="width:50%;">开具人：{{ issuer }}</td>
+            <td style="width:50%; text-align:right;" class="seal-area">收款单位（盖章）：{{ seal_img }}</td>
+        </tr></table></td></tr>
     </table>
-
-    <div class="note">
-        <p>本收据仅作对账使用，款项未实际到账前不视为已收款。</p>
-    </div>
+    <div class="note"><p>本收据仅作对账使用，款项未实际到账前不视为已收款。</p></div>
 </div>
-</body>
-</html>"""
+</body></html>"""
