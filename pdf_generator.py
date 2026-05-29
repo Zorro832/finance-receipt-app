@@ -184,11 +184,10 @@ def render_template(template: str, data: dict) -> str:
     else:
         data['total_amount_display'] = str(total_amount)
 
-    # 财务章图片 - 使用相对路径，让 link_callback 处理
-    seal_path = os.path.join(get_base_path(), 'static', 'seal.png')
-    if os.path.exists(seal_path):
-        # 使用 /static/ 开头路径，link_callback 会转换为实际路径
-        data['seal_img'] = '<img src="/static/seal.png" style="width:80px; height:80px;" />'
+    # 财务章图片 - 预览和PDF都用base64嵌入（最可靠）
+    seal_base64 = get_seal_base64()
+    if seal_base64:
+        data['seal_img'] = '<img src="data:image/png;base64,' + seal_base64 + '" style="width:80px; height:80px;" />'
     else:
         data['seal_img'] = ''
 
