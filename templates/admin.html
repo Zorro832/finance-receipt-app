@@ -134,6 +134,7 @@
                                 <label class="form-label">邮箱类型</label>
                                 <select class="form-select" id="smtp_provider">
                                     <option value="qq">QQ邮箱</option>
+                                    <option value="exmail" selected>腾讯企业邮箱</option>
                                     <option value="163">163邮箱</option>
                                     <option value="126">126邮箱</option>
                                     <option value="aliyun">阿里企业邮箱</option>
@@ -147,9 +148,9 @@
                         </div>
                         <div class="row mb-3">
                             <div class="col-md-6">
-                                <label class="form-label">授权码 <span class="text-danger">*</span></label>
-                                <input type="password" class="form-control" id="smtp_pass" placeholder="邮箱设置中获取的授权码">
-                                <small class="text-muted">QQ邮箱：设置→账户→POP3/SMTP→生成授权码</small>
+                                <label class="form-label">密码/授权码 <span class="text-danger">*</span></label>
+                                <input type="password" class="form-control" id="smtp_pass" placeholder="腾讯企业邮箱填写登录密码">
+                                <small class="text-muted">腾讯企业邮箱：填写邮箱登录密码（不是授权码）</small>
                             </div>
                             <div class="col-md-6" id="customSmtpRow" style="display:none;">
                                 <label class="form-label">SMTP服务器地址</label>
@@ -406,7 +407,8 @@ async function loadSmtpConfig() {
             $('#smtp_pass').attr('placeholder', '已设置，留空不修改');
         }
         // 自动判断邮箱类型
-        if (user.endsWith('@qq.com')) { $('#smtp_provider').val('qq'); }
+        if (user.endsWith('@qq.com') && !user.endsWith('@exmail.qq.com')) { $('#smtp_provider').val('qq'); }
+        else if (user.endsWith('@exmail.qq.com')) { $('#smtp_provider').val('exmail'); }
         else if (user.endsWith('@163.com')) { $('#smtp_provider').val('163'); }
         else if (user.endsWith('@126.com')) { $('#smtp_provider').val('126'); }
         else if (user.endsWith('@aliyun.com') || user.endsWith('@enterprise.com')) { $('#smtp_provider').val('aliyun'); }
@@ -422,6 +424,7 @@ async function saveSmtpConfig() {
     const provider = $('#smtp_provider').val();
     const smtpHosts = {
         'qq': 'smtp.qq.com',
+        'exmail': 'smtp.exmail.qq.com',
         '163': 'smtp.163.com',
         '126': 'smtp.126.com',
         'aliyun': 'smtp.qiye.aliyun.com'

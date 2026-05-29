@@ -736,13 +736,14 @@ def send_receipt_email(receipt_id):
         # 读取邮件配置
         admin_config = get_admin_config()
         smtp_host = os.environ.get('SMTP_HOST', admin_config.get('smtp_host', ''))
-        smtp_port = int(os.environ.get('SMTP_PORT', admin_config.get('smtp_port', 587)))
+        smtp_port = int(os.environ.get('SMTP_PORT', admin_config.get('smtp_port', 465)))  # 默认465(SSL)
         smtp_user = os.environ.get('SMTP_USER', admin_config.get('smtp_user', ''))
         smtp_pass = os.environ.get('SMTP_PASS', admin_config.get('smtp_pass', ''))
         smtp_from = os.environ.get('SMTP_FROM', admin_config.get('smtp_from', smtp_user))
+        smtp_use_ssl = smtp_port == 465  # 465端口使用SSL，其他使用STARTTLS
 
         if not smtp_host or not smtp_user or not smtp_pass:
-            return jsonify({'error': '邮件服务未配置，请在系统管理→邮件发送配置中设置邮箱和授权码'}), 400
+            return jsonify({'error': '邮件服务未配置，请在系统管理→邮件发送配置中设置邮箱和密码'}), 400
 
         # 构建邮件
         msg = MIMEMultipart()
@@ -760,9 +761,14 @@ def send_receipt_email(receipt_id):
                                   filename=f'收据_{receipt["receipt_number"]}.pdf')
             msg.attach(pdf_attach)
 
-        # 发送
-        server = smtplib.SMTP(smtp_host, smtp_port)
-        server.starttls()
+        # 发送（支持SSL和STARTTLS）
+        if smtp_use_ssl:
+            import smtplib
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port)
+            server.starttls()
+        
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_from, [email_to], msg.as_string())
         server.quit()
@@ -771,8 +777,8 @@ def send_receipt_email(receipt_id):
         db.update_receipt(receipt_id, {'email': email_to})
 
         return jsonify({'success': True, 'message': f'收据已发送到 {email_to}'})
-    except smtplib.SMTPAuthenticationError:
-        return jsonify({'error': 'SMTP认证失败，请检查邮箱和授权码是否正确'}), 500
+    except smtplib.SMTPAuthenticationError as e:
+        return jsonify({'error': f'SMTP认证失败：请检查邮箱和密码是否正确。腾讯企业邮箱请使用登录密码，不是授权码。详细错误：{str(e)}'}), 500
     except smtplib.SMTPException as e:
         return jsonify({'error': f'邮件发送失败: {str(e)}'}), 500
     except Exception as e:
@@ -853,8 +859,10 @@ def test_send_email():
 
         admin_config = get_admin_config()
         smtp_host = admin_config.get('smtp_host', '')
+        smtp_port = int(admin_config.get('smtp_port', 465))
         smtp_user = admin_config.get('smtp_user', '')
         smtp_pass = admin_config.get('smtp_pass', '')
+        smtp_use_ssl = smtp_port == 465
 
         if not smtp_host or not smtp_user or not smtp_pass:
             return jsonify({'error': '请先保存完整的邮件配置'}), 400
@@ -864,13 +872,19 @@ def test_send_email():
         msg['To'] = email_to
         msg['Subject'] = '收据系统 - 邮件测试'
 
-        server = smtplib.SMTP(smtp_host, 587)
-        server.starttls()
+        if smtp_use_ssl:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port)
+            server.starttls()
+        
         server.login(smtp_user, smtp_pass)
         server.sendmail(smtp_user, [email_to], msg.as_string())
         server.quit()
 
         return jsonify({'success': True, 'message': '测试邮件已发送'})
+    except smtplib.SMTPAuthenticationError as e:
+        return jsonify({'error': f'SMTP认证失败：请检查邮箱和密码。腾讯企业邮箱请使用登录密码。详细错误：{str(e)}'}), 500
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
