@@ -9,3 +9,4 @@ build/
 test_receipt*.pdf
 data/admin.json
 data/sessions.json
+.deploy.conf
