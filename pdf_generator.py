@@ -25,11 +25,11 @@ _register_cjk_fonts()
 
 
 def num_to_chinese(num):
-    """数字转中文大写"""
+    """数字转中文大写金额"""
     num = float(num)
-    units = ['', '拾', '佰', '仟']
-    nums = '零壹贰叁肆伍陆柒捌玖'
-    decimal_unit = ['角', '分']
+    cn_nums = '零壹贰叁肆伍陆柒捌玖'
+    cn_int_units = ['', '拾', '佰', '仟']
+    cn_big_units = ['', '万', '亿', '万亿']
 
     integer_part = int(num)
     decimal_part = round((num - integer_part) * 100)
@@ -37,44 +37,61 @@ def num_to_chinese(num):
     if integer_part == 0 and decimal_part == 0:
         return '零元整'
 
+    # === 整数部分 ===
+    int_str = str(integer_part)
     result = ''
 
-    if integer_part > 0:
-        str_int = str(integer_part)
-        length = len(str_int)
-        zero_flag = False
+    # 4位一组，从低位到高位
+    groups = []
+    for i in range(len(int_str), 0, -4):
+        groups.append(int_str[max(0, i-4):i])
+    groups.reverse()
 
-        for i, digit in enumerate(str_int):
-            n = int(digit)
-            pos = length - i - 1
+    for gi, group in enumerate(groups):
+        big_idx = len(groups) - 1 - gi
+        group_str = ''
+        leading_zero = False
 
-            if n == 0:
-                if not zero_flag and pos % 4 == 0 and pos > 0:
-                    result += '零'
-                    zero_flag = True
+        for j, ch in enumerate(group):
+            digit = int(ch)
+            unit_pos = len(group) - 1 - j
+
+            if digit == 0:
+                if group_str and not group_str.endswith('零'):
+                    group_str += '零'
+                if not group_str:
+                    leading_zero = True
             else:
-                zero_flag = False
-                result += nums[n] + units[pos % 4]
+                group_str += cn_nums[digit] + cn_int_units[unit_pos]
 
-            if pos % 4 == 0 and pos > 0:
-                if pos == 4:
-                    result += '万'
-                elif pos == 8:
-                    result += '亿'
+        group_str = group_str.rstrip('零')
 
-        result += '元'
-    else:
-        result = '零元'
+        if group_str:
+            if leading_zero and result and not result.endswith('零'):
+                result += '零'
+            result += group_str + cn_big_units[big_idx]
+        else:
+            has_later = any(int(c) != 0 for g in groups[gi+1:] for c in g)
+            if has_later and not result.endswith('零'):
+                result += '零'
 
+    result += '元'
+
+    # === 小数部分 ===
     if decimal_part > 0:
         jiao = decimal_part // 10
         fen = decimal_part % 10
         if jiao > 0:
-            result += nums[jiao] + '角'
+            result += cn_nums[jiao] + '角'
+        elif integer_part > 0:
+            result += '零'
         if fen > 0:
-            result += nums[fen] + '分'
+            result += cn_nums[fen] + '分'
     else:
         result += '整'
+
+    if integer_part == 0:
+        result = '零元' + result.split('元', 1)[1] if '元' in result else result
 
     return result
 
