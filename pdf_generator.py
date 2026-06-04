@@ -210,7 +210,7 @@ def render_template(template: str, data: dict) -> str:
     # 财务章图片 - 预览和PDF都用base64嵌入（最可靠）
     mime_type, seal_base64 = get_seal_base64()
     if seal_base64:
-        data['seal_img'] = f'<img src="data:{mime_type};base64,{seal_base64}" style="width:99pt; height:99pt;" />'
+        data['seal_img'] = f'<img src="data:{mime_type};base64,{seal_base64}" style="width:158pt; height:158pt;" />'
     else:
         data['seal_img'] = ''
 
